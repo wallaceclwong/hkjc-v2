@@ -12,7 +12,12 @@ class NotificationService:
     def __init__(self):
         # Initialize Firebase Admin SDK using the same service account
         if not firebase_admin._apps:
-            cred = credentials.Certificate(Config.GOOGLE_APPLICATION_CREDENTIALS)
+            if Config.GOOGLE_APPLICATION_CREDENTIALS and os.path.exists(Config.GOOGLE_APPLICATION_CREDENTIALS):
+                cred = credentials.Certificate(Config.GOOGLE_APPLICATION_CREDENTIALS)
+            else:
+                # Fallback to Application Default Credentials (for Cloud Run)
+                cred = credentials.ApplicationDefault()
+                
             firebase_admin.initialize_app(cred, {
                 'projectId': Config.PROJECT_ID
             })
