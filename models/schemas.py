@@ -62,6 +62,7 @@ class Prediction(BaseModel):
     recommended_bet: str = "WIN"
     probabilities: Dict[str, float]
     kelly_stakes: Dict[str, float]
+    market_odds: Optional[Dict[str, float]] = None
     analysis_markdown: str
 
 class RaceResult(BaseModel):

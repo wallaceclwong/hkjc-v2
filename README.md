@@ -30,9 +30,24 @@ git pull origin main
 - **Database:** All machines connect to the same **Google Firestore** project. Data scraped on PC 1 is instantly available on PC 2.
 - **AI:** All machines use the same **Gemini API** key and prompts.
 
+## 🚀 Cloud Run Deployment
+
+To run this autonomously 24/7 in the cloud:
+
+1.  **Build & Push**:
+    ```bash
+    gcloud builds submit --tag gcr.io/hkjc-v2/hkjc-predictor
+    ```
+2.  **Deploy**:
+    ```bash
+    gcloud run deploy hkjc-predictor --image gcr.io/hkjc-v2/hkjc-predictor --platform managed --region us-central1 --set-env-vars="USE_VERTEX_AI=True,GCP_LOCATION=us-central1"
+    ```
+3.  **Scheduler**: Set a Cloud Scheduler job to `POST` to your Cloud Run URL 15 minutes before the first race.
+
 ## 🛠 Project Structure
 - `services/`: Ingestion and analytical scripts.
 - `models/`: Pydantic data schemas.
 - `docs/`: Data model and architectural documentation.
 - `config/`: Centralized settings and environment loading.
 - `data/`: Local cache of JSON results (not synced to Git by design).
+- `Dockerfile`: Production container config.

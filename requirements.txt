@@ -1,4 +1,24 @@
-playwright==1.42.0
-pytest-playwright==0.4.4
-pydantic==2.6.3
-python-dotenv==1.0.1
+# Core scraping
+playwright
+
+# Data validation
+pydantic
+pytest
+
+# Utilities
+python-dotenv
+aiohttp
+
+# Google AI
+google-genai
+google-cloud-firestore
+firebase-admin
+google-cloud-aiplatform
+google-cloud-bigquery
+
+# Web Server
+fastapi
+uvicorn
+
+# Logging (used across most services)
+loguru

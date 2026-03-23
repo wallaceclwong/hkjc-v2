@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+data/logs/
+data/results/
+data/analytical/
+data/odds/
+data/predictions/
+data/weather/
+service-account-key.json
+.env
+.git/
+.vscode/
+.agents/
+tmp_*.py
+runner_debug.log
+stderr.log

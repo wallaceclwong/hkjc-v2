@@ -9,7 +9,17 @@ env/
 .pytest_cache/
 .coverage
 htmlcov/
-services/debug_screenshot.png
-services/debug_page.html
-data/*.json
-!.gitkeep
+
+# Project Specific
+data/
+tmp/
+.agents/
+*.log
+*.png
+*.jpg
+*.html
+!data/.gitkeep
+service-account-key.json
+*.json
+!data/fixtures_*.json
+!data/weather/intel_*.json

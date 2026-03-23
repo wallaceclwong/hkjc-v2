@@ -1,0 +1,5 @@
+{
+  "name": "hkjc-dashboard",
+  "version": "4.0.0",
+  "description": "HKJC AI Race Day Dashboard — vanilla JS/CSS, served by FastAPI"
+}
