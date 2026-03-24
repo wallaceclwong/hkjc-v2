@@ -1,7 +1,7 @@
 // ─── HKJC AI — Race Day Dashboard v4 ────────────────────────────────────────
 const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
     ? 'http://localhost:8000'
-    : `http://${window.location.host}`;
+    : window.location.origin;
 
 const POLL_MS = 5000;
 
