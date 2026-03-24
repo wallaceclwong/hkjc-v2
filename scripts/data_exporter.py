@@ -3,8 +3,13 @@ import os
 from pathlib import Path
 from datetime import datetime
 
+import sys
+# Add project root
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from config.settings import Config
+
 def export_stats():
-    base_dir = Path("c:/Users/ASUS/hkjc")
+    base_dir = Config.BASE_DIR
     predictions_dir = base_dir / "data/predictions"
     results_dir = base_dir / "data/results"
     output_path = base_dir / "dashboard/src/data/stats.json"

@@ -41,5 +41,6 @@ def sync():
 
 if __name__ == "__main__":
     # Ensure we are in the project root
-    os.chdir("c:/Users/ASUS/hkjc")
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    os.chdir(root_dir)
     sync()

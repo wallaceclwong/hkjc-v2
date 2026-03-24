@@ -9,6 +9,7 @@ from loguru import logger
 # Ensure project root is in path for services imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from config.settings import Config
 from services.betting_evaluator import BettingEvaluator
 
 class RLOptimizer:
@@ -16,7 +17,7 @@ class RLOptimizer:
     Reinforcement Learning style optimizer to adjust AI biases based on real-world performance.
     """
     def __init__(self):
-        self.base_dir = Path("c:/Users/ASUS/hkjc")
+        self.base_dir = Config.BASE_DIR
         self.bias_path = self.base_dir / "data/bias_correction.json"
         self.predictions_dir = self.base_dir / "data/predictions"
         self.results_dir = self.base_dir / "data/results"

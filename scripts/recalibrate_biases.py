@@ -18,7 +18,7 @@ async def recalibrate(years: list, sample_rate: float, limit_meetings: int = Non
     """
     Automates the recalibration of AI biases using historical data.
     """
-    base_dir = Path("c:/Users/ASUS/hkjc")
+    base_dir = Config.BASE_DIR
     data_dir = base_dir / "data"
     results_dir = data_dir / "results"
     analytical_dir = data_dir / "analytical"

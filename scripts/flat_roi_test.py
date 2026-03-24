@@ -1,9 +1,10 @@
-import sys
-from pathlib import Path
-import json
-
-root_dir = 'c:/Users/ASUS/hkjc/'
+import os
+# Add project root
+root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(root_dir)
+
+from config.settings import Config
+root_dir = Config.BASE_DIR
 
 preds_dir = Path(root_dir) / "data" / "predictions"
 results_dir = Path(root_dir) / "data" / "results"

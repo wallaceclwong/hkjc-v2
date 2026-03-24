@@ -1,8 +1,9 @@
 import sys
 from google.cloud import bigquery
 
+import os
 # Add project root
-sys.path.append('c:/Users/ASUS/hkjc/')
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config.settings import Config
 
 def run_audit():

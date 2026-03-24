@@ -12,7 +12,8 @@ def housekeeping(env="vm", dry_run=False):
     print(f"--- HKJC HOUSEKEEPING (Environment: {env.upper()}) ---")
     if dry_run: print("[DRY RUN] No files will be deleted or moved.")
     
-    base_dir = Path("c:/Users/ASUS/hkjc")
+    from config.settings import Config
+    base_dir = Config.BASE_DIR
     
     # 1. Retention Rules
     if env == "vm":

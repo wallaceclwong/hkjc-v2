@@ -108,7 +108,8 @@ def construct_target_response(data):
     return json.dumps(target, indent=2)
 
 def prepare_tuning_data(limit=50, output_file="data/tuning_canary_50.jsonl"):
-    base_dir = Path("c:/Users/ASUS/hkjc")
+    from config.settings import Config
+    base_dir = Config.BASE_DIR
     results_dir = base_dir / "data/results"
     data_dir = base_dir / "data"
     

@@ -15,10 +15,23 @@ import json
 from config.settings import Config
 from services.firestore_service import FirestoreService
 
+# Try to find weathernext_pro in sibling directory or via env
 try:
-    sys.path.append("c:/Users/ASUS/weathernext_pro/src")
-    from v2_engine import get_track_forecast
-except ImportError:
+    wn_path = os.getenv("WEATHERNEXT_PATH")
+    if not wn_path:
+        # Check sibling directory
+        sibling_wn = Config.BASE_DIR.parent / "weathernext_pro/src"
+        if sibling_wn.exists():
+            wn_path = str(sibling_wn)
+    
+    if wn_path:
+        sys.path.append(wn_path)
+        from v2_engine import get_track_forecast
+        print(f"[INFO] Integrated WeatherNext v2 from {wn_path}")
+    else:
+        raise ImportError("WeatherNext path not found")
+except Exception as e:
+    print(f"[WARNING] WeatherNext v2 integration skipped: {e}")
     get_track_forecast = lambda x: x # Fallback to current condition
 
 from datetime import datetime, timedelta

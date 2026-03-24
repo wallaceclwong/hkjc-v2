@@ -2,8 +2,9 @@ import sys
 import json
 from google.cloud import storage
 
+import os
 # Add project root
-sys.path.append('c:/Users/ASUS/hkjc/')
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config.settings import Config
 
 def calculate_roi():

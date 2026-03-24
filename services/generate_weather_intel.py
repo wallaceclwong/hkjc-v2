@@ -120,8 +120,9 @@ class WeatherAnalyzer:
         intel["fetched_at"] = datetime.now(timezone.utc).isoformat()
         
         # 4. Save locally
-        os.makedirs("data/weather", exist_ok=True)
-        filename = f"data/weather/intel_{venue}_{intel['date']}.json"
+        weather_dir = Config.BASE_DIR / "data/weather"
+        weather_dir.mkdir(parents=True, exist_ok=True)
+        filename = weather_dir / f"intel_{venue}_{intel['date']}.json"
         with open(filename, "w", encoding="utf-8") as f:
             json.dump(intel, f, indent=2)
             

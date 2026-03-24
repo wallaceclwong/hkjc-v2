@@ -5,7 +5,7 @@ from pathlib import Path
 from google.cloud import storage
 
 # Add project root
-sys.path.append('c:/Users/ASUS/hkjc/')
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config.settings import Config
 
 def analyze_roi():

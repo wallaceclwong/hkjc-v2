@@ -21,7 +21,7 @@ class ContextCachingService:
             project=Config.PROJECT_ID,
             location=Config.GCP_LOCATION
         )
-        self.base_dir = Path("c:/Users/ASUS/hkjc")
+        self.base_dir = Config.BASE_DIR
         self.data_dir = self.base_dir / "data"
 
     def gather_historical_context(self, num_meetings=5) -> str:

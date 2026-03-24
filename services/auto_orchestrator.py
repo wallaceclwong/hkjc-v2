@@ -14,7 +14,7 @@ from config.settings import Config
 class AutoOrchestrator:
     def __init__(self):
         self.firestore = FirestoreService()
-        self.base_dir = Path("c:/Users/ASUS/hkjc")
+        self.base_dir = Config.BASE_DIR
         self.fixtures_path = self.base_dir / "data" / "fixtures_2026.json"
         self.last_check = None
 

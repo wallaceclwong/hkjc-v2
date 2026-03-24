@@ -10,6 +10,7 @@ from typing import Dict, List, Optional
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from config.settings import Config
 from services.odds_ingest import OddsIngest
 from services.browser_manager import BrowserManager
 
@@ -22,7 +23,7 @@ class MarketWatchdog:
         self.odds_service = OddsIngest(headless=True)
         self.baselines = {} # {race_id: {horse_no: baseline_odds}}
         self.drop_threshold = drop_threshold
-        self.data_dir = Path("c:/Users/ASUS/hkjc/data/alerts")
+        self.data_dir = Config.BASE_DIR / "data/alerts"
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.last_heartbeat = None
 
