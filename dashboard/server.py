@@ -265,22 +265,42 @@ def load_horse_names(race_date: str, race_no: int) -> dict:
     """
     Builds a saddle_number -> horse_name dict from the racecard file.
     race_date should be 'YYYY-MM-DD', race_no is an int.
-    Returns empty dict if racecard is not found.
+    Returns empty dict if racecard is not found locally or in Firestore.
     """
     date_compact = race_date.replace("-", "")
-    racecard_path = DATA_DIR / f"racecard_{date_compact}_R{race_no}.json"
-    if not racecard_path.exists():
-        return {}
-    try:
-        with open(racecard_path, "r", encoding="utf-8") as f:
-            rc = json.load(f)
-        return {
-            str(h["saddle_number"]): h["horse_name"]
-            for h in rc.get("horses", [])
-            if "saddle_number" in h and "horse_name" in h
-        }
-    except Exception:
-        return {}
+    racecard_filename = f"racecard_{date_compact}_R{race_no}.json"
+    racecard_path = DATA_DIR / racecard_filename
+    
+    # 1. Try local file (Fastest)
+    if racecard_path.exists():
+        try:
+            with open(racecard_path, "r", encoding="utf-8") as f:
+                rc = json.load(f)
+            return {
+                str(h["saddle_number"]): h["horse_name"]
+                for h in rc.get("horses", [])
+                if "saddle_number" in h and "horse_name" in h
+            }
+        except Exception as e:
+            print(f"[ERROR] local racecard read failed: {e}")
+
+    # 2. Try Firestore (Fallback for Cloud Run)
+    if USE_FIRESTORE:
+        try:
+            # Document ID is usually the filename without .json or a custom ID
+            # In our case, let's try the compact format YYYYMMDD_RX
+            doc_id = f"{date_compact}_R{race_no}"
+            rc_data = firestore.get_document(Config.COL_RACECARDS, doc_id)
+            if rc_data:
+                return {
+                    str(h["saddle_number"]): h["horse_name"]
+                    for h in rc_data.get("horses", [])
+                    if "saddle_number" in h and "horse_name" in h
+                }
+        except Exception as e:
+            print(f"[ERROR] firestore racecard fetch failed: {e}")
+
+    return {}
 
 @app.get("/picks/upcoming")
 async def get_upcoming_top_picks():
@@ -339,9 +359,10 @@ async def get_upcoming_top_picks():
                     if not probs: continue
 
                     race_no_num = int(data.get("race_id", "R1").split("_")[-1].replace("R", ""))
-                    # Since we are in cloud, horse names SHOULD ideally be in the prediction doc already
-                    # if they were injected during sync/save. If not, we have a gap.
-                    horse_names = data.get("horse_names", {})
+                    # Call load_horse_names (which has Firestore fallback)
+                    horse_names = load_horse_names(target_date, race_no_num)
+                    if not horse_names:
+                        horse_names = data.get("horse_names", {})
 
                     # Priority 1: highest AI probability
                     top_horse_id = max(probs, key=probs.get)
@@ -351,7 +372,12 @@ async def get_upcoming_top_picks():
                         top_horse_id = max(kelly_stakes, key=lambda h: kelly_stakes[h])
 
                     kelly_selections = [
-                        { "horse_no": h, "horse_name": horse_names.get(str(h), f"Horse {h}"), "kelly_stake": s, "market_odds": market_odds.get(h, "--") }
+                        { 
+                            "horse_no": h, 
+                            "horse_name": horse_names.get(str(h), f"Horse {h}"), 
+                            "kelly_stake": s, 
+                            "market_odds": market_odds.get(h, "--") 
+                        }
                         for h, s in kelly_stakes.items() if s > 0
                     ]
 
