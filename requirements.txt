@@ -19,6 +19,8 @@ google-cloud-bigquery
 # Web Server
 fastapi
 uvicorn
+aiofiles
+python-multipart
 
 # Logging (used across most services)
 loguru
