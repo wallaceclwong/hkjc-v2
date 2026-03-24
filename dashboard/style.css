@@ -37,6 +37,10 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--tex
 
 .topbar-clock { font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 600; color: var(--text); min-width: 60px; text-align: right; }
 
+.topbar-bankroll { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; border-left: 1px solid var(--border); padding-left: 14px; margin-right: 4px; }
+.bankroll-label { font-size: 8px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; }
+.bankroll-value { font-size: 14px; font-weight: 900; color: var(--gold); font-family: 'JetBrains Mono', monospace; }
+
 /* RACE TABS */
 .race-tabs-wrap { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 20px; flex-shrink: 0; overflow-x: auto; scrollbar-width: none; }
 .race-tabs-wrap::-webkit-scrollbar { display: none; }

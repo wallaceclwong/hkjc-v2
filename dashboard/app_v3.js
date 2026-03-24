@@ -60,6 +60,17 @@ async function poll() {
 
         if (picksData.success && picksData.picks?.length) {
             allPicks    = picksData.picks;
+            
+            // Update Bankroll Display
+            if (picksData.bankroll) {
+                const bankrollEl = document.getElementById('topbar-bankroll');
+                const wrap = document.getElementById('topbar-bankroll-wrap');
+                if (bankrollEl && wrap) {
+                    bankrollEl.textContent = '$' + picksData.bankroll.toLocaleString();
+                    wrap.style.display = 'flex';
+                }
+            }
+
             meetingDate = picksData.date || '';
             meetingVenue= allPicks[0]?.race_id?.split('_')[1] || '';
             renderVenueHeader();

@@ -452,7 +452,8 @@ async def get_upcoming_top_picks():
         return {
             "success": True, 
             "date": target_date,
-            "picks": top_picks
+            "picks": top_picks,
+            "bankroll": Config.INITIAL_BANKROLL
         }
     except Exception as e:
         return {"success": False, "error": str(e)}

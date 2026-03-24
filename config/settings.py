@@ -26,8 +26,8 @@ class Config:
     BROWSER_TIMEOUT = 30000  # 30 seconds
     
     # Kelly Criterion Config
-    INITIAL_BANKROLL = 10000.0
-    KELLY_FRACTION = 0.25  # "Quarter-Kelly" for safer growth
+    INITIAL_BANKROLL = 9000.0
+    KELLY_FRACTION = 0.10  # "Tenth-Kelly" for safe real-money start
     
     # Collections
     COL_FIXTURES = "fixtures"
