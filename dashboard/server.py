@@ -446,23 +446,12 @@ async def subscribe_to_alerts(request: SubscribeRequest):
 # Serve static files for the dashboard
 DASHBOARD_DIR = Path(__file__).resolve().parent
 
-@app.get("/")
+@app.get("/", response_class=FileResponse)
 async def read_index():
     index_path = DASHBOARD_DIR / "index.html"
     if index_path.exists():
         return FileResponse(str(index_path))
-    
-    # Debug: List files if not found
-    try:
-        files = [f.name for f in DASHBOARD_DIR.iterdir()]
-    except Exception as e:
-        files = [f"Error listing: {str(e)}"]
-        
-    return {
-        "detail": "index.html not found in dashboard directory",
-        "dashboard_dir": str(DASHBOARD_DIR),
-        "files_found": files
-    }
+    return JSONResponse(status_code=404, content={"detail": "index.html not found in dashboard directory"})
 
 app.mount("/", StaticFiles(directory=str(DASHBOARD_DIR), html=True), name="dashboard")
 
