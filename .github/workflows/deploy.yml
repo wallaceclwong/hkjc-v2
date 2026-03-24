@@ -36,4 +36,4 @@ jobs:
             --region ${{ env.REGION }} \
             --platform managed \
             --allow-unauthenticated \
-            --set-env-vars="USE_VERTEX_AI=True,GCP_LOCATION=us-central1"
+            --set-env-vars="USE_VERTEX_AI=True,GCP_LOCATION=us-central1,GCP_PROJECT_ID=hkjc-v2"

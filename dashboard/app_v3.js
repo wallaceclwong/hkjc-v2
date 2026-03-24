@@ -71,13 +71,15 @@ async function poll() {
             renderAlerts(latestData.alerts?.alerts || []);
         }
 
+        if (latestData.success || picksData.success) {
+            const loader = document.getElementById('loading-state');
+            if (loader) loader.style.display = 'none';
+        }
+
         // Hash change check (avoid flashing if nothing changed)
         const hash = `${allPicks.map(p=>p.kelly_stake).join(',')}|${latestData.weather?.track_condition_forecast}`;
         if (hash !== lastHash) {
             lastHash = hash;
-            // Hide loading state once we have data
-            const loader = document.getElementById('loading-state');
-            if (loader) loader.style.display = 'none';
 
             // Auto-select Overview on first load
             if (currentRaceNo === null && allPicks.length) {

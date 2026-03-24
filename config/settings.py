@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Config:
-    PROJECT_ID = os.getenv("GCP_PROJECT_ID", "hkjc-v2-3026-63")
+    PROJECT_ID = os.getenv("GCP_PROJECT_ID", "hkjc-v2")
     REGION = os.getenv("GCP_REGION", "asia-east1")
     FIRESTORE_DATABASE = os.getenv("FIRESTORE_DATABASE", "(default)")
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")

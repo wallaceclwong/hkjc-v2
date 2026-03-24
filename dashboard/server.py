@@ -276,7 +276,7 @@ async def get_upcoming_top_picks():
         # Target date for the next major meeting
         pred_dir = DATA_DIR / "predictions"
         top_picks = []
-        target_date = "N/A"
+        target_date = datetime.now().strftime("%Y-%m-%d")
         pred_files = []
 
         if pred_dir.exists():
@@ -309,9 +309,14 @@ async def get_upcoming_top_picks():
                 filters=[("race_id", ">=", target_date), ("race_id", "<=", target_date + "\uf8ff")]
             )
             if not f_preds:
-                # Try yesterday? No, usually we want today or imminent. 
-                # Just use whatever f_preds we have.
-                pass
+                # Fallback: Find the most recent date in Firestore
+                latest_doc = firestore.get_latest(Config.COL_PREDICTIONS, order_by="race_id")
+                if latest_doc:
+                    target_date = latest_doc.get("race_id", "").split("_")[0]
+                    f_preds = firestore.query(
+                        Config.COL_PREDICTIONS, 
+                        filters=[("race_id", ">=", target_date), ("race_id", "<=", target_date + "\uf8ff")]
+                    )
             
             for data in f_preds:
                 try:
