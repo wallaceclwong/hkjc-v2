@@ -79,11 +79,9 @@ async function poll() {
             const loader = document.getElementById('loading-state');
             if (loader) loader.style.display = 'none';
 
-            // Auto-select best upcoming race on first load
+            // Auto-select Overview on first load
             if (currentRaceNo === null && allPicks.length) {
-                const stakePicks = allPicks.filter(p => p.kelly_stake > 0);
-                const target = stakePicks.length ? stakePicks[0] : allPicks[0];
-                selectRace(target.race_no);
+                selectRace('all');
             } else if (currentRaceNo !== null) {
                 // Re-render currently selected race with fresh data
                 await renderRaceDetail(currentRaceNo);
@@ -118,6 +116,15 @@ function renderRaceTabs() {
     if (container.children.length === maxRace) return;
 
     container.innerHTML = '';
+    
+    // 0. All Races / Summary Tab
+    const allBtn = document.createElement('button');
+    allBtn.className = 'race-tab' + (currentRaceNo === 'all' ? ' active' : '');
+    allBtn.id = 'tab-all';
+    allBtn.textContent = 'MEETING';
+    allBtn.onclick = () => selectRace('all');
+    container.appendChild(allBtn);
+
     for (let r = 1; r <= maxRace; r++) {
         const pick = allPicks.find(p => p.race_no === r);
         const hasStake = pick && pick.kelly_stake > 0;
@@ -143,7 +150,11 @@ function setActiveTab(raceNo) {
 async function selectRace(raceNo) {
     currentRaceNo = raceNo;
     setActiveTab(raceNo);
-    await renderRaceDetail(raceNo);
+    if (raceNo === 'all') {
+        renderMeetingOverview();
+    } else {
+        await renderRaceDetail(raceNo);
+    }
 }
 
 async function renderRaceDetail(raceNo) {
@@ -313,6 +324,51 @@ function renderMain(pick, pred, alerts) {
 
     // Populate racecard meta if available
     populateHorseMeta(pick, pred);
+}
+
+// ─── MEETING OVERVIEW RENDERER ───────────────────────────────────────────────
+function renderMeetingOverview() {
+    const main = document.getElementById('main-content');
+    
+    let rowsHtml = allPicks.map(p => {
+        const hasStake = p.kelly_stake > 0;
+        const probPct  = Math.round((p.prob || 0) * 100);
+        const name     = p.horse_name || `Horse #${p.horse_no}`;
+        const odds     = p.market_odds > 0 ? `${p.market_odds}×` : '--';
+        
+        return `
+        <div class="runner-row" style="cursor:pointer; padding: 12px 16px; border-bottom: 1px solid var(--border)" onclick="selectRace(${p.race_no})">
+            <div style="flex: 0 0 40px; font-weight: 800; color: var(--gold)">R${p.race_no}</div>
+            <div class="runner-no ${hasStake ? 'top' : ''}" style="flex: 0 0 30px">${p.horse_no}</div>
+            <div class="runner-name" style="flex: 1; ${hasStake ? 'color:var(--text); font-weight:700' : ''}">${name}${p.is_best_bet ? ' ★' : ''}</div>
+            <div style="flex: 0 0 60px; text-align: right; color: var(--gold)">${odds}</div>
+            <div style="flex: 0 0 60px; text-align: right; font-weight: 700; color: ${hasStake ? 'var(--green)' : 'var(--text)'}">${probPct}%</div>
+            <div style="flex: 0 0 80px; text-align: right; font-weight: 800; color: var(--green)">${hasStake ? '$'+Math.round(p.kelly_stake) : ''}</div>
+        </div>`;
+    }).join('');
+
+    main.innerHTML = `
+    <div class="runners-section" style="margin-top: 0; border-radius: 12px; overflow: hidden">
+        <div class="section-label" style="background: var(--bg-card); margin: 0; padding: 16px; border-bottom: 1px solid var(--border)">
+            Meeting Summary — Top AI Picks
+        </div>
+        <div style="display: flex; padding: 8px 16px; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; background: var(--bg-dark)">
+            <div style="flex: 0 0 40px">Race</div>
+            <div style="flex: 0 0 30px">#</div>
+            <div style="flex: 1">Top Runner</div>
+            <div style="flex: 0 0 60px; text-align: right">Odds</div>
+            <div style="flex: 0 0 60px; text-align: right">Conf</div>
+            <div style="flex: 0 0 80px; text-align: right">Kelly</div>
+        </div>
+        <div style="background: var(--bg-card)">
+            ${rowsHtml || '<div style="padding: 20px; text-align: center; color: var(--muted)">No predictions loaded yet.</div>'}
+        </div>
+    </div>
+    <div style="margin-top: 20px; padding: 16px; background: rgba(255,193,7,0.05); border: 1px solid rgba(255,193,7,0.2); border-radius: 12px; font-size: 12px; color: var(--muted)">
+        <strong>How to use:</strong> This overview shows the single highest-probability horse for each race. 
+        Click on any row to view the full race analysis, market signals, and alternative betting options.
+    </div>
+    `;
 }
 
 function populateHorseMeta(pick, pred) {
