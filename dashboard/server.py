@@ -439,11 +439,16 @@ async def subscribe_to_alerts(request: SubscribeRequest):
                 "failure_count": response.failure_count
             }
         }
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
 # Serve static files for the dashboard
 DASHBOARD_DIR = Path(__file__).resolve().parent
+
+@app.get("/", response_class=FileResponse)
+async def read_index():
+    index_path = DASHBOARD_DIR / "index.html"
+    if index_path.exists():
+        return FileResponse(index_path)
+    return {"detail": "index.html not found in dashboard directory"}
+
 app.mount("/", StaticFiles(directory=str(DASHBOARD_DIR), html=True), name="dashboard")
 
 if __name__ == "__main__":
