@@ -127,7 +127,7 @@ function renderRaceTabs() {
 
     for (let r = 1; r <= maxRace; r++) {
         const pick = allPicks.find(p => p.race_no === r);
-        const hasStake = pick && pick.kelly_stake > 0;
+        const hasStake = pick && (pick.kelly_stake > 0 || (pick.kelly_selections && pick.kelly_selections.length > 0));
         const btn = document.createElement('button');
         btn.className = 'race-tab' + (hasStake ? ' has-stake' : '') + (r === currentRaceNo ? ' active' : '');
         btn.id = `tab-R${r}`;
@@ -331,6 +331,7 @@ function renderMeetingOverview() {
     const main = document.getElementById('main-content');
     
     let rowsHtml = allPicks.map(p => {
+        const hasRaceStake = p.kelly_stake > 0 || (p.kelly_selections && p.kelly_selections.length > 0);
         const hasStake = p.kelly_stake > 0;
         const probPct  = Math.round((p.prob || 0) * 100);
         const name     = p.horse_name || `Horse #${p.horse_no}`;
@@ -338,7 +339,7 @@ function renderMeetingOverview() {
         
         return `
         <div class="runner-row" style="cursor:pointer; padding: 12px 16px; border-bottom: 1px solid var(--border)" onclick="selectRace(${p.race_no})">
-            <div style="flex: 0 0 40px; font-weight: 800; color: var(--gold)">R${p.race_no}</div>
+            <div style="flex: 0 0 40px; font-weight: 800; color: var(--gold)">R${p.race_no}${hasRaceStake ? '★' : ''}</div>
             <div class="runner-no ${hasStake ? 'top' : ''}" style="flex: 0 0 30px">${p.horse_no}</div>
             <div class="runner-name" style="flex: 1; ${hasStake ? 'color:var(--text); font-weight:700' : ''}">${name}${p.is_best_bet ? ' ★' : ''}</div>
             <div style="flex: 0 0 60px; text-align: right; color: var(--gold)">${odds}</div>
