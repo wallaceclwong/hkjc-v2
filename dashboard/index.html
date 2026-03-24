@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HKJC - Race Day</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="topbar">
+  <div class="topbar-logo">HKJC AI</div>
+  <div class="topbar-venue" id="topbar-venue">LOADING</div>
+  <div class="topbar-date" id="topbar-date"></div>
+  <div class="topbar-spacer"></div>
+  <div class="topbar-weather" id="topbar-weather">
+    Track <span id="tw-track">--</span>
+    | Rain <span id="tw-rain">--%</span>
+    | Heat <span id="tw-heat">--%</span>
+  </div>
+  <div class="health-indicator" id="health-indicator"><div class="dot" id="health-dot"></div> LIVE ODDS</div>
+  <div class="topbar-clock" id="clock">--:--:--</div>
+
+</div>
+<div class="race-tabs-wrap">
+  <div class="race-tabs" id="race-tabs"></div>
+</div>
+<div class="main" id="main-content">
+  <div class="empty-state" id="loading-state">
+    <h3>Loading picks...</h3>
+    <p>Fetching today predictions from the AI engine.</p>
+  </div>
+</div>
+<div class="fab" id="fab-refresh" title="Force Refresh">&#8635;</div>
+<script src="app_v3.js"></script>
+</body>
+</html>
