@@ -12,6 +12,9 @@ from fastapi.responses import FileResponse, JSONResponse
 import json
 
 # WeatherNext 2 Integration (Safe Import)
+from config.settings import Config
+from services.firestore_service import FirestoreService
+
 try:
     sys.path.append("c:/Users/ASUS/weathernext_pro/src")
     from v2_engine import get_track_forecast
@@ -67,6 +70,10 @@ execution_engine = ExecutionEngine(dry_run=True, headless=False)
 notification_service = NotificationService()
 rl_optimizer = RLOptimizer()
 market_watchdog = MarketWatchdog()
+firestore = FirestoreService()
+
+# Determine if we should prioritize Firestore (Cloud Run or explicit env var)
+USE_FIRESTORE = os.getenv("USE_FIRESTORE", "false").lower() == "true" or os.getenv("K_SERVICE") is not None
 
 # Enable CORS for local dev
 app.add_middleware(
@@ -110,6 +117,9 @@ async def get_latest():
         if p_file:
             with open(p_file, "r", encoding="utf-8") as f:
                 latest_pred = json.load(f)
+        elif USE_FIRESTORE:
+            # Fallback to Firestore for Cloud Run
+            latest_pred = firestore.get_latest(Config.COL_PREDICTIONS, order_by="race_id")
 
         # 2. Latest Weather Intelligence
         latest_weather = None
@@ -117,6 +127,8 @@ async def get_latest():
         if w_file:
             with open(w_file, "r", encoding="utf-8") as f:
                 latest_weather = json.load(f)
+        elif USE_FIRESTORE:
+            latest_weather = firestore.get_latest(Config.COL_WEATHER, order_by="timestamp")
 
         # 3. Latest Alerts
         all_alerts = []
@@ -189,10 +201,16 @@ async def get_latest():
 async def get_specific_prediction(race_id: str):
     """Fetches a specific prediction by ID (e.g. 2026-03-18_HV_R1)."""
     try:
+        pred_data = None
         p_file = DATA_DIR / "predictions" / f"prediction_{race_id}.json"
+        
         if p_file.exists():
             with open(p_file, "r", encoding="utf-8") as f:
                 pred_data = json.load(f)
+        elif USE_FIRESTORE:
+            pred_data = firestore.get_document(Config.COL_PREDICTIONS, race_id)
+
+        if pred_data:
             # Inject horse_names from racecard if not already in file
             if not pred_data.get("horse_names"):
                 parts = race_id.split("_")  # e.g. ['2026-03-25', 'HV', 'R1']
@@ -259,6 +277,7 @@ async def get_upcoming_top_picks():
         pred_dir = DATA_DIR / "predictions"
         top_picks = []
         target_date = "N/A"
+        pred_files = []
 
         if pred_dir.exists():
             # 1. Try today's date
@@ -278,7 +297,59 @@ async def get_upcoming_top_picks():
                     all_preds.sort(key=lambda x: x.name, reverse=True)
                     target_date = all_preds[0].name.split("_")[1] # prediction_YYYY-MM-DD_...
                     pred_files = list(pred_dir.glob(f"prediction_{target_date}_*.json"))
+
+        # Firestore Fallback for picks
+        if not pred_files and USE_FIRESTORE:
+            print("[INFO] No local prediction files. Fetching from Firestore...")
+            # Approximate current target date if not found locally
+            target_date = datetime.now().strftime("%Y-%m-%d")
+            # Query Firestore for predictions on this date
+            f_preds = firestore.query(
+                Config.COL_PREDICTIONS, 
+                filters=[("race_id", ">=", target_date), ("race_id", "<=", target_date + "\uf8ff")]
+            )
+            if not f_preds:
+                # Try yesterday? No, usually we want today or imminent. 
+                # Just use whatever f_preds we have.
+                pass
             
+            for data in f_preds:
+                try:
+                    probs = data.get("probabilities", {})
+                    kelly_stakes = data.get("kelly_stakes", {})
+                    market_odds  = data.get("market_odds", {})
+                    if not probs: continue
+
+                    race_no_num = int(data.get("race_id", "R1").split("_")[-1].replace("R", ""))
+                    # Since we are in cloud, horse names SHOULD ideally be in the prediction doc already
+                    # if they were injected during sync/save. If not, we have a gap.
+                    horse_names = data.get("horse_names", {})
+
+                    top_horse_id = max(probs, key=probs.get) # simplified for fallback
+                    if kelly_stakes:
+                        top_horse_id = max(kelly_stakes, key=lambda h: kelly_stakes[h])
+
+                    kelly_selections = [
+                        { "horse_no": h, "horse_name": horse_names.get(str(h), f"Horse {h}"), "kelly_stake": s, "market_odds": market_odds.get(h, "--") }
+                        for h, s in kelly_stakes.items() if s > 0
+                    ]
+
+                    top_picks.append({
+                        "race_id": data.get("race_id"),
+                        "race_no": race_no_num,
+                        "horse_no": top_horse_id,
+                        "horse_name": horse_names.get(str(top_horse_id), f"Horse {top_horse_id}"),
+                        "prob": probs.get(top_horse_id, 0),
+                        "kelly_stake": kelly_stakes.get(top_horse_id, 0),
+                        "kelly_selections": kelly_selections,
+                        "market_odds": market_odds.get(top_horse_id, "--"),
+                        "is_best_bet": data.get("is_best_bet", False),
+                        "has_odds": bool(market_odds),
+                    })
+                except Exception as e:
+                    print(f"Error parsing Firestore pred: {e}")
+
+        if pred_files:
             for p_file in pred_files:
                 try:
                     with open(p_file, "r", encoding="utf-8") as f:
