@@ -192,7 +192,21 @@ async def get_specific_prediction(race_id: str):
         p_file = DATA_DIR / "predictions" / f"prediction_{race_id}.json"
         if p_file.exists():
             with open(p_file, "r", encoding="utf-8") as f:
-                return {"success": True, "prediction": json.load(f)}
+                pred_data = json.load(f)
+            # Inject horse_names from racecard if not already in file
+            if not pred_data.get("horse_names"):
+                parts = race_id.split("_")  # e.g. ['2026-03-25', 'HV', 'R1']
+                if len(parts) >= 2:
+                    race_date = parts[0]
+                    race_no_str = parts[-1].replace("R", "")
+                    try:
+                        race_no = int(race_no_str)
+                        horse_names = load_horse_names(race_date, race_no)
+                        if horse_names:
+                            pred_data["horse_names"] = horse_names
+                    except ValueError:
+                        pass
+            return {"success": True, "prediction": pred_data}
         return {"success": False, "error": "Prediction not found"}
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -215,6 +229,27 @@ async def get_recommendations():
         return {"success": True, "recommendations": recommendations}
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+def load_horse_names(race_date: str, race_no: int) -> dict:
+    """
+    Builds a saddle_number -> horse_name dict from the racecard file.
+    race_date should be 'YYYY-MM-DD', race_no is an int.
+    Returns empty dict if racecard is not found.
+    """
+    date_compact = race_date.replace("-", "")
+    racecard_path = DATA_DIR / f"racecard_{date_compact}_R{race_no}.json"
+    if not racecard_path.exists():
+        return {}
+    try:
+        with open(racecard_path, "r", encoding="utf-8") as f:
+            rc = json.load(f)
+        return {
+            str(h["saddle_number"]): h["horse_name"]
+            for h in rc.get("horses", [])
+            if "saddle_number" in h and "horse_name" in h
+        }
+    except Exception:
+        return {}
 
 @app.get("/picks/upcoming")
 async def get_upcoming_top_picks():
@@ -255,6 +290,10 @@ async def get_upcoming_top_picks():
                         if not probs:
                             continue
 
+                        # Build horse_names from racecard
+                        race_no_num = int(data.get("race_id", "R1").split("_")[-1].replace("R", ""))
+                        horse_names = load_horse_names(target_date, race_no_num)
+
                         # Priority 1: horse with the HIGHEST Kelly stake (real bet signal)
                         top_horse_id = None
                         if kelly_stakes:
@@ -277,7 +316,12 @@ async def get_upcoming_top_picks():
 
                         # Build all Kelly selections for this race (may be >1)
                         kelly_selections = [
-                            {"horse_no": h, "kelly_stake": s, "market_odds": market_odds.get(h, "--")}
+                            {
+                                "horse_no": h,
+                                "horse_name": horse_names.get(str(h), f"Horse {h}"),
+                                "kelly_stake": s,
+                                "market_odds": market_odds.get(h, "--")
+                            }
                             for h, s in kelly_stakes.items() if s > 0
                         ]
 
@@ -285,10 +329,10 @@ async def get_upcoming_top_picks():
                             "race_id":          data.get("race_id"),
                             "race_no":          int(data.get("race_id").split("_")[-1].replace("R", "")),
                             "horse_no":         top_horse_id,
-                            "horse_name":       data.get("horse_names", {}).get(top_horse_id, f"Horse {top_horse_id}"),
+                            "horse_name":       horse_names.get(str(top_horse_id), f"Horse {top_horse_id}"),
                             "prob":             probs.get(top_horse_id, 0),
                             "kelly_stake":      kelly_stakes.get(top_horse_id, 0),
-                            "kelly_selections": kelly_selections,   # all bettable horses
+                            "kelly_selections": kelly_selections,
                             "market_odds":      market_odds.get(top_horse_id, "--"),
                             "is_best_bet":      data.get("is_best_bet", False),
                             "has_odds":         bool(market_odds),
