@@ -189,9 +189,12 @@ function renderMain(pick, pred, alerts) {
         const rows = kellySels.map(function(sel) {
             const pct = ((sel.kelly_stake / 10000) * 100).toFixed(1);
             const o   = sel.market_odds > 0 ? sel.market_odds + '×' : '--';
+            const horseName = (pred && pred.horse_names && pred.horse_names[sel.horse_no])
+                ? pred.horse_names[sel.horse_no]
+                : 'Horse ' + sel.horse_no;
             return '<div class="runner-row" style="padding:10px 0">'
                 + '<div class="runner-no top">' + sel.horse_no + '</div>'
-                + '<div class="runner-name" style="color:var(--green);font-weight:700">★ #' + sel.horse_no + ' Kelly $' + sel.kelly_stake
+                + '<div class="runner-name" style="color:var(--green);font-weight:700">★ ' + horseName + ' · Kelly $' + sel.kelly_stake
                 + ' <span style="color:var(--muted);font-weight:400">(' + pct + '% bankroll · ' + o + ')</span></div>'
                 + '<button class="btn btn-stage" style="flex:0 0 auto;padding:6px 14px;font-size:11px" onclick="stageBetHorse(\'' + sel.horse_no + '\', ' + sel.kelly_stake + ')">STAGE</button>'
                 + '</div>';
