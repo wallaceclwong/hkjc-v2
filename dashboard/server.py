@@ -439,6 +439,9 @@ async def subscribe_to_alerts(request: SubscribeRequest):
                 "failure_count": response.failure_count
             }
         }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
 # Serve static files for the dashboard
 DASHBOARD_DIR = Path(__file__).resolve().parent
 
