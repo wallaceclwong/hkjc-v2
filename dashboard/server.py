@@ -442,7 +442,9 @@ async def subscribe_to_alerts(request: SubscribeRequest):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-app.mount("/", StaticFiles(directory="dashboard", html=True), name="dashboard")
+# Serve static files for the dashboard
+DASHBOARD_DIR = Path(__file__).resolve().parent
+app.mount("/", StaticFiles(directory=str(DASHBOARD_DIR), html=True), name="dashboard")
 
 if __name__ == "__main__":
     import uvicorn
