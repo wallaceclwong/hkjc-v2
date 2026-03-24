@@ -325,8 +325,11 @@ async def get_upcoming_top_picks():
                     # if they were injected during sync/save. If not, we have a gap.
                     horse_names = data.get("horse_names", {})
 
-                    top_horse_id = max(probs, key=probs.get) # simplified for fallback
-                    if kelly_stakes:
+                    # Priority 1: highest AI probability
+                    top_horse_id = max(probs, key=probs.get)
+                    
+                    # Priority 2: falls back to kelly_stakes if probs were somehow empty (unlikely)
+                    if not top_horse_id and kelly_stakes:
                         top_horse_id = max(kelly_stakes, key=lambda h: kelly_stakes[h])
 
                     kelly_selections = [
@@ -365,25 +368,12 @@ async def get_upcoming_top_picks():
                         race_no_num = int(data.get("race_id", "R1").split("_")[-1].replace("R", ""))
                         horse_names = load_horse_names(target_date, race_no_num)
 
-                        # Priority 1: horse with the HIGHEST Kelly stake (real bet signal)
-                        top_horse_id = None
-                        if kelly_stakes:
+                        # Priority 1: highest AI probability
+                        top_horse_id = max(probs, key=probs.get)
+                        
+                        # Priority 2: falls back to kelly_stakes if probs were somehow empty (unlikely)
+                        if not top_horse_id and kelly_stakes:
                             top_horse_id = max(kelly_stakes, key=lambda h: kelly_stakes[h])
-                        
-                        # Priority 2: recommended_bet field
-                        if not top_horse_id:
-                            rec_bet = data.get("recommended_bet", "")
-                            if rec_bet and "WIN" in rec_bet:
-                                try:
-                                    extracted = "".join(filter(str.isdigit, rec_bet))
-                                    if extracted in probs:
-                                        top_horse_id = extracted
-                                except:
-                                    pass
-                        
-                        # Priority 3: highest AI probability
-                        if not top_horse_id:
-                            top_horse_id = max(probs, key=probs.get)
 
                         # Build all Kelly selections for this race (may be >1)
                         kelly_selections = [
