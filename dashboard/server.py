@@ -142,7 +142,7 @@ def get_current_meeting_info():
         # Using id ordering (None as order_by) to bypass field indexing issues
         today_preds = firestore.query(
             Config.COL_PREDICTIONS, 
-            filters=[("__name__", ">=", "prediction_" + today_str), ("__name__", "<=", "prediction_" + today_str + "\uf8ff")],
+            filters=[("__name__", ">=", today_str), ("__name__", "<=", today_str + "\uf8ff")],
             limit=1
         )
         
@@ -199,8 +199,10 @@ async def get_latest():
                 latest_pred = json.load(f)
         elif USE_FIRESTORE:
             # Fallback to Firestore for Cloud Run
-            latest_pred = firestore.get_latest(Config.COL_PREDICTIONS, order_by="race_id")
-            if not latest_pred:
+            latest_preds = firestore.query(Config.COL_PREDICTIONS, order_by="__name__", direction="DESCENDING", limit=1)
+            if latest_preds:
+                latest_pred = latest_preds[0]
+            else:
                  # Try document ID ordering if field isn't indexed
                  latest_pred = firestore.get_latest(Config.COL_PREDICTIONS)
 
@@ -410,13 +412,13 @@ async def get_upcoming_top_picks():
             # Query Firestore for predictions on this date
             f_preds = firestore.query(
                 Config.COL_PREDICTIONS, 
-                filters=[("race_id", ">=", "prediction_" + target_date), ("race_id", "<=", "prediction_" + target_date + "\uf8ff")]
+                filters=[("__name__", ">=", target_date), ("__name__", "<=", target_date + "\uf8ff")]
             )
             if not f_preds:
                 # Fallback: Find the most recent date in Firestore
                 latest_doc = firestore.get_latest(Config.COL_PREDICTIONS, order_by="race_id")
                 if latest_doc:
-                    target_date = latest_doc.get("race_id", "").split("_")[0]
+                    target_date = latest_doc.id.split("_")[0]
                     f_preds = firestore.query(
                         Config.COL_PREDICTIONS, 
                         filters=[("race_id", ">=", "prediction_" + target_date), ("race_id", "<=", "prediction_" + target_date + "\uf8ff")]
