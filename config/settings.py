@@ -16,7 +16,7 @@ class Config:
     GEMINI_MODEL = "gemini-2.5-pro"
     USE_VERTEX_AI = True               # Vertex AI
     GCP_LOCATION = "us-central1"       # Models are confirmed available here
-    GCS_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME", "hkjc-v2-vault")
+    GCS_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME", "hkjc-vault-6172aadc")
     
     # --- Betting Account (User must fill these in .env) ---
     HKJC_ACCOUNT = os.getenv("HKJC_ACCOUNT", "YOUR_ACCOUNT_ID")

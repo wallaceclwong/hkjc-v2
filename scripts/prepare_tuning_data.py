@@ -115,96 +115,76 @@ def prepare_tuning_data(limit=50, output_file="data/tuning_canary_50.jsonl"):
     
     result_files = sorted(list(results_dir.glob("results_*.json")), reverse=True)
     
-    samples = []
     count = 0
+    print(f"Sampling {limit} races for tuning into {output_file}...")
     
-    print(f"Sampling {limit} races for tuning...")
-    
-    for rf in result_files:
-        if count >= limit: break
-        
-        try:
-            # Extract ID components: results_2026-03-22_ST_R1.json
-            parts = rf.stem.split("_")
-            date_str = parts[1]
-            venue = parts[2]
-            race_no = parts[3]
+    with open(output_file, 'w', encoding='utf-8') as f_out:
+        for rf in result_files:
+            if count >= limit: break
             
-            # Load all parts
-            with open(rf, 'r', encoding='utf-8') as f:
-                res_data = json.load(f)
-            
-            # Find racecard
-            date_compact = date_str.replace("-", "")
-            rc_file = data_dir / f"racecard_{date_compact}_{race_no}.json"
-            
-            if rc_file.exists():
-                with open(rc_file, 'r', encoding='utf-8') as f:
-                    rc_data = json.load(f)
-            else:
-                # Reconstruct skeleton from results (matches PredictionEngine logic)
-                skeleton_horses = []
-                for r in res_data.get("results", []):
-                    skeleton_horses.append({
-                        "saddle_number": int(r["horse_no"]) if r["horse_no"].isdigit() else 0,
-                        "horse_name": r.get("brand_id", ""), 
-                        "jockey": r.get("jockey", ""),
-                        "trainer": r.get("trainer", ""),
-                        "weight": 133,
-                    })
-                rc_data = {
-                    "id": f"{date_str}_{race_no}",
-                    "distance": 1200, 
-                    "horses": skeleton_horses
+            try:
+                # Extract ID components
+                parts = rf.stem.split("_")
+                date_str = parts[1]
+                venue = parts[2]
+                race_no = parts[3]
+                
+                with open(rf, 'r', encoding='utf-8') as f:
+                    res_data = json.load(f)
+                
+                date_compact = date_str.replace("-", "")
+                rc_file = data_dir / f"racecard_{date_compact}_{race_no}.json"
+                
+                if rc_file.exists():
+                    with open(rc_file, 'r', encoding='utf-8') as f:
+                        rc_data = json.load(f)
+                else:
+                    skeleton_horses = []
+                    for r in res_data.get("results", []):
+                        skeleton_horses.append({
+                            "saddle_number": int(r["horse_no"]) if r["horse_no"].isdigit() else 0,
+                            "horse_name": r.get("brand_id", ""), 
+                            "jockey": r.get("jockey", ""),
+                            "trainer": r.get("trainer", ""),
+                            "weight": 133,
+                        })
+                    rc_data = {"id": f"{date_str}_{race_no}", "distance": 1200, "horses": skeleton_horses}
+                    
+                ana_file = data_dir / "analytical" / f"analytical_{date_str}_{venue}_{race_no}.json"
+                if not ana_file.exists(): continue
+                with open(ana_file, 'r', encoding='utf-8') as f:
+                    ana_data = json.load(f)
+                    
+                data = {
+                    "racecard": rc_data, "results": res_data, "analytical": ana_data,
+                    "odds": {}, "synergy": {}, "hidden_form": {}, "weather_intel": {}, "pedigree_intel": {}
                 }
                 
-            # Find analytical
-            ana_file = data_dir / "analytical" / f"analytical_{date_str}_{venue}_{race_no}.json"
-            with open(ana_file, 'r', encoding='utf-8') as f:
-                ana_data = json.load(f)
-                
-            data = {
-                "racecard": rc_data,
-                "results": res_data,
-                "analytical": ana_data,
-                "odds": {}, # Placeholder
-                "synergy": {},
-                "hidden_form": {},
-                "weather_intel": {},
-                "pedigree_intel": {}
-            }
-            
-            # Construct JSONL Entry
-            entry = {
-                "systemInstruction": {
-                    "role": "system",
-                    "parts": [{"text": "Act as a professional Hong Kong horse racing analyst. Analyze race data and provide a winning prediction."}]
-                },
-                "contents": [
-                    {
-                        "role": "user",
-                        "parts": [{"text": construct_training_prompt(data)}]
+                entry = {
+                    "systemInstruction": {
+                        "role": "system",
+                        "parts": [{"text": "Act as a professional Hong Kong horse racing analyst. Analyze race data and provide a winning prediction."}]
                     },
-                    {
-                        "role": "model",
-                        "parts": [{"text": construct_target_response(data)}]
-                    }
-                ]
-            }
-            
-            samples.append(entry)
-            count += 1
-            if count % 10 == 0: print(f"Processed {count}/{limit} samples...")
-            
-        except Exception as e:
-            # print(f"Error processing {rf.name}: {e}")
-            continue
-
-    with open(output_file, 'w', encoding='utf-8') as f:
-        for s in samples:
-            f.write(json.dumps(s) + "\n")
-            
-    print(f"Success! Created {output_file} with {len(samples)} examples.")
+                    "contents": [
+                        {"role": "user", "parts": [{"text": construct_training_prompt(data)}]},
+                        {"role": "model", "parts": [{"text": construct_target_response(data)}]}
+                    ]
+                }
+                
+                f_out.write(json.dumps(entry) + "\n")
+                f_out.flush()
+                count += 1
+                if count % 50 == 0: print(f"Processed {count}/{limit} samples...")
+                
+            except Exception:
+                continue
+                
+    print(f"Success! Created {output_file} with {count} examples.")
 
 if __name__ == "__main__":
-    prepare_tuning_data(limit=10000, output_file="data/tuning_full_8year.jsonl")
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--limit", type=int, default=1000)
+    parser.add_argument("--output", type=str, default="data/tuning_subset_1000.jsonl")
+    args = parser.parse_args()
+    prepare_tuning_data(limit=args.limit, output_file=args.output)
