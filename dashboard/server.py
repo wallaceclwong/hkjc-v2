@@ -136,6 +136,9 @@ async def get_latest():
         elif USE_FIRESTORE:
             # Fallback to Firestore for Cloud Run
             latest_pred = firestore.get_latest(Config.COL_PREDICTIONS, order_by="race_id")
+            if not latest_pred:
+                 # Try document ID ordering if field isn't indexed
+                 latest_pred = firestore.get_latest(Config.COL_PREDICTIONS)
 
         # 2. Latest Weather Intelligence
         latest_weather = None
@@ -343,7 +346,7 @@ async def get_upcoming_top_picks():
             # Query Firestore for predictions on this date
             f_preds = firestore.query(
                 Config.COL_PREDICTIONS, 
-                filters=[("race_id", ">=", target_date), ("race_id", "<=", target_date + "\uf8ff")]
+                filters=[("race_id", ">=", "prediction_" + target_date), ("race_id", "<=", "prediction_" + target_date + "\uf8ff")]
             )
             if not f_preds:
                 # Fallback: Find the most recent date in Firestore
@@ -352,7 +355,7 @@ async def get_upcoming_top_picks():
                     target_date = latest_doc.get("race_id", "").split("_")[0]
                     f_preds = firestore.query(
                         Config.COL_PREDICTIONS, 
-                        filters=[("race_id", ">=", target_date), ("race_id", "<=", target_date + "\uf8ff")]
+                        filters=[("race_id", ">=", "prediction_" + target_date), ("race_id", "<=", "prediction_" + target_date + "\uf8ff")]
                     )
             
             for data in f_preds:
