@@ -199,7 +199,7 @@ async def get_latest():
                 latest_pred = json.load(f)
         elif USE_FIRESTORE:
             # Fallback to Firestore for Cloud Run
-            latest_preds = firestore.query(Config.COL_PREDICTIONS, order_by="__name__", direction="DESCENDING", limit=1)
+            latest_preds = firestore.query(Config.COL_PREDICTIONS, order_by=("__name__", "DESCENDING"), limit=1)
             if latest_preds:
                 latest_pred = latest_preds[0]
             else:
