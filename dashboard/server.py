@@ -44,6 +44,7 @@ from services.notification_service import NotificationService
 from firebase_admin import messaging as firebase_messaging
 from loguru import logger
 import socket
+import asyncio
 
 HK_TZ = pytz.timezone("Asia/Hong_Kong")
 
@@ -102,6 +103,69 @@ app.add_middleware(
 @app.get("/ping")
 async def ping():
     return {"success": True, "message": "pong"}
+
+@app.get("/debug/firestore")
+async def debug_firestore():
+    """Diagnostic endpoint for Firestore connectivity."""
+    creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    path_exists = os.path.exists(creds_path) if creds_path else False
+    
+    status = {
+        "project_id": Config.PROJECT_ID,
+        "creds_env": creds_path,
+        "creds_file_exists": path_exists,
+        "firestore_client_initialized": firestore.db is not None,
+        "error": None
+    }
+    
+    try:
+        # Test a simple query if client exists
+        if firestore.db:
+            col = firestore.db.collection(Config.COL_PREDICTIONS).limit(1).get()
+            status["query_test"] = "SUCCESS"
+        else:
+            status["query_test"] = "SKIPPED (No Client)"
+    except Exception as e:
+        status["error"] = str(e)
+        status["query_test"] = "FAILED"
+        
+    return status
+
+def get_current_meeting_info():
+    """Robustly identifies tonight's or the latest meeting venue and date."""
+    today_str = datetime.now(HK_TZ).strftime("%Y-%m-%d")
+    venue = "ST" # Default fallback
+    meeting_date = today_str
+    
+    try:
+        # 1. Try to find a doc for today specifically (prefix search)
+        # Using id ordering (None as order_by) to bypass field indexing issues
+        today_preds = firestore.query(
+            Config.COL_PREDICTIONS, 
+            filters=[("__name__", ">=", "prediction_" + today_str), ("__name__", "<=", "prediction_" + today_str + "\uf8ff")],
+            limit=1
+        )
+        
+        if today_preds:
+            race_id = today_preds[0].get("race_id", "")
+            parts = race_id.split("_")
+            if len(parts) > 1:
+                meeting_date = parts[0]
+                venue = parts[1]
+                return meeting_date, venue
+
+        # 2. Fallback: Get the absolute latest prediction in the system
+        latest_pred = firestore.get_latest(Config.COL_PREDICTIONS) # Default doc ID ordering
+        if latest_pred:
+            race_id = latest_pred.get("race_id", "")
+            parts = race_id.split("_")
+            if len(parts) > 1:
+                meeting_date = parts[0]
+                venue = parts[1]
+    except Exception as e:
+        logger.error(f"Error detecting meeting info: {e}")
+
+    return meeting_date, venue
 
 # Use dynamic path for cross-platform support
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -557,14 +621,7 @@ import asyncio
 @app.get("/health")
 async def health_check():
     """Returns system health and service status."""
-    # Determine current venue dynamically
-    current_venue = "ST"
-    today_str = datetime.now(HK_TZ).strftime("%Y-%m-%d")
-    latest_pred = firestore.get_latest(Config.COL_PREDICTIONS, order_by="race_id")
-    if latest_pred and today_str in latest_pred.get("race_id", ""):
-        parts = latest_pred.get("race_id", "").split("_")
-        if len(parts) > 1:
-            current_venue = parts[1]
+    meeting_date, venue = get_current_meeting_info()
 
     return {
         "success": True,
@@ -573,7 +630,8 @@ async def health_check():
             "market_watchdog": {
                 "active": True,
                 "last_heartbeat": market_watchdog.last_heartbeat,
-                "venue": current_venue
+                "venue": venue,
+                "meeting_date": meeting_date
             },
             "cloud_sync": USE_FIRESTORE
         },
@@ -594,17 +652,8 @@ async def recovery_task(race_no: int, venue: str):
 @app.on_event("startup")
 async def startup_event():
     # Detect tonight's venue dynamically for the watchdog
-    today_str = datetime.now(HK_TZ).strftime("%Y-%m-%d")
-    venue = "ST"
-    
-    # Check Firestore for today's predictions to find the venue
-    if USE_FIRESTORE:
-        latest = firestore.get_latest(Config.COL_PREDICTIONS, order_by="race_id")
-        if latest and today_str in latest.get("race_id", ""):
-            parts = latest.get("race_id", "").split("_")
-            if len(parts) > 1:
-                venue = parts[1]
-                logger.info(f"📍 Detected tonight's venue: {venue}")
+    meeting_date, venue = get_current_meeting_info()
+    logger.info(f"📍 Initializing Watchdog for meeting: {meeting_date} ({venue})")
 
     # Start the watchdog in a recovery wrapper
     asyncio.create_task(recovery_task(race_no=1, venue=venue))
