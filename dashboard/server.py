@@ -35,6 +35,7 @@ except Exception as e:
     get_track_forecast = lambda x: x # Fallback to current condition
 
 from datetime import datetime, timedelta
+import pytz
 from pydantic import BaseModel
 from services.execution_engine import ExecutionEngine
 from services.rl_optimizer import RLOptimizer
@@ -43,6 +44,8 @@ from services.notification_service import NotificationService
 from firebase_admin import messaging as firebase_messaging
 from loguru import logger
 import socket
+
+HK_TZ = pytz.timezone("Asia/Hong_Kong")
 
 app = FastAPI()
 
@@ -551,6 +554,15 @@ import asyncio
 @app.get("/health")
 async def health_check():
     """Returns system health and service status."""
+    # Determine current venue dynamically
+    current_venue = "ST"
+    today_str = datetime.now(HK_TZ).strftime("%Y-%m-%d")
+    latest_pred = firestore.get_latest(Config.COL_PREDICTIONS, order_by="race_id")
+    if latest_pred and today_str in latest_pred.get("race_id", ""):
+        parts = latest_pred.get("race_id", "").split("_")
+        if len(parts) > 1:
+            current_venue = parts[1]
+
     return {
         "success": True,
         "status": "online",
@@ -558,11 +570,11 @@ async def health_check():
             "market_watchdog": {
                 "active": True,
                 "last_heartbeat": market_watchdog.last_heartbeat,
-                "venue": "ST" # Mocked for current meeting
+                "venue": current_venue
             },
             "cloud_sync": USE_FIRESTORE
         },
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now(HK_TZ).isoformat()
     }
 
 async def recovery_task(race_no: int, venue: str):
@@ -578,8 +590,21 @@ async def recovery_task(race_no: int, venue: str):
 
 @app.on_event("startup")
 async def startup_event():
+    # Detect tonight's venue dynamically for the watchdog
+    today_str = datetime.now(HK_TZ).strftime("%Y-%m-%d")
+    venue = "ST"
+    
+    # Check Firestore for today's predictions to find the venue
+    if USE_FIRESTORE:
+        latest = firestore.get_latest(Config.COL_PREDICTIONS, order_by="race_id")
+        if latest and today_str in latest.get("race_id", ""):
+            parts = latest.get("race_id", "").split("_")
+            if len(parts) > 1:
+                venue = parts[1]
+                logger.info(f"📍 Detected tonight's venue: {venue}")
+
     # Start the watchdog in a recovery wrapper
-    asyncio.create_task(recovery_task(race_no=1, venue="ST"))
+    asyncio.create_task(recovery_task(race_no=1, venue=venue))
 
 @app.post("/subscribe")
 async def subscribe_to_alerts(request: SubscribeRequest):
