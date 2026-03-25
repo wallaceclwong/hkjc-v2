@@ -202,7 +202,8 @@ async def get_latest():
                     "pedigree": scraper_health,
                     "ai_engine": "ONLINE",
                     "weather_pro": "STABLE",
-                    "local_ip": get_local_ip()
+                    "local_ip": get_local_ip(),
+                    "cloud_sync": USE_FIRESTORE
                 }
             }
         }
@@ -558,7 +559,8 @@ async def health_check():
                 "active": True,
                 "last_heartbeat": market_watchdog.last_heartbeat,
                 "venue": "ST" # Mocked for current meeting
-            }
+            },
+            "cloud_sync": USE_FIRESTORE
         },
         "timestamp": datetime.now().isoformat()
     }

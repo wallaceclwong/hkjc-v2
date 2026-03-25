@@ -144,3 +144,31 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--tex
 .fab:active { transform:scale(.94); }
 .fab.spinning { animation:spin .8s linear infinite; }
 @keyframes spin { to { transform:rotate(360deg); } }
+
+/* ── Cloud Sync Status ── */
+.cloud-sync-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    padding: 4px 10px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    margin-right: 12px;
+    transition: all 0.3s ease;
+}
+
+.cloud-sync-status.active {
+    color: var(--green);
+    border-color: rgba(0,200,122,0.3);
+    background: rgba(0,200,122,0.05);
+    box-shadow: 0 0 10px rgba(0,200,122,0.1);
+}
+
+.cloud-icon {
+    font-size: 14px;
+}

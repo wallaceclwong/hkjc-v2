@@ -80,6 +80,7 @@ async function poll() {
         if (latestData.success) {
             renderWeather(latestData.weather);
             renderAlerts(latestData.alerts?.alerts || []);
+            renderCloudSync(latestData.health?.services?.cloud_sync);
         }
 
         if (latestData.success || picksData.success) {
@@ -408,6 +409,19 @@ function renderWeather(w) {
 // ─── ALERTS (store globally for race detail rerender) ─────────────────────────
 function renderAlerts(alerts) {
     window._lastAlerts = alerts;
+}
+
+// ─── CLOUD SYNC ──────────────────────────────────────────────────────────────
+function renderCloudSync(active) {
+    const el = document.getElementById('cloud-sync-status');
+    if (!el) return;
+    if (active) {
+        el.innerHTML = '<span class="cloud-icon">&#9729;</span> CLOUD SYNCED';
+        el.classList.add('active');
+    } else {
+        el.innerHTML = '<span class="cloud-icon">&#9729;</span> LOCAL MODE';
+        el.classList.remove('active');
+    }
 }
 
 // ─── STAGE BET ────────────────────────────────────────────────────────────────
