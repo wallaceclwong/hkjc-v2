@@ -24,3 +24,4 @@ service-account-key.json
 *.json
 !data/fixtures_*.json
 !data/weather/intel_*.json
+node_modules
