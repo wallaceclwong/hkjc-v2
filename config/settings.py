@@ -10,6 +10,7 @@ class Config:
     REGION = os.getenv("GCP_REGION", "asia-east1")
     FIRESTORE_DATABASE = os.getenv("FIRESTORE_DATABASE", "(default)")
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+    MODEL_PROJECT_ID = os.getenv("VERTEX_MODEL_PROJECT", PROJECT_ID)
     GOOGLE_APPLICATION_CREDENTIALS = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
     
     # AI Config
@@ -45,6 +46,12 @@ class Config:
     @classmethod
     def get_firestore_client(cls):
         from google.cloud import firestore
-        if cls.GOOGLE_APPLICATION_CREDENTIALS and os.path.exists(cls.GOOGLE_APPLICATION_CREDENTIALS):
-            return firestore.Client(project=cls.PROJECT_ID, database=cls.FIRESTORE_DATABASE, credentials=None) # Client will pick up from env if set
+        from google.oauth2 import service_account
+        
+        creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        if creds_path and os.path.exists(creds_path):
+            print(f"[INFO] Using Service Account Key: {creds_path}")
+            creds = service_account.Credentials.from_service_account_file(creds_path)
+            return firestore.Client(project=cls.PROJECT_ID, database=cls.FIRESTORE_DATABASE, credentials=creds)
+            
         return firestore.Client(project=cls.PROJECT_ID, database=cls.FIRESTORE_DATABASE)

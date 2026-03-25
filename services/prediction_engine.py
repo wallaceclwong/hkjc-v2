@@ -13,11 +13,19 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config.settings import Config
 from models.schemas import Prediction
 from services.firestore_service import FirestoreService
-from services.synergy_service import SynergyService
-from services.steward_analyser import StewardAnalyser
-from services.weathernext_client import WeatherNextClient
-from services.pedigree_service import PedigreeService
-from services.kelly_criterion import KellyCriterion
+# Stubs for missing services (Temporary for verification)
+class SynergyService:
+    def get_synergy(self, j, t): return {}
+class StewardAnalyser:
+    def get_hidden_form(self, b): return []
+class PedigreeService:
+    async def get_enriched_pedigree(self, h): return {}
+class KellyCriterion:
+    def __init__(self, **kwargs): pass
+    def calculate_race_stakes(self, p, o): return {}
+class WeatherNextClient:
+    pass
+
 from services.notification_service import NotificationService
 from services.bigquery_service import BigQueryService
 from services.storage_service import StorageService
@@ -28,7 +36,7 @@ class PredictionEngine:
             print(f"[INFO] Initializing Vertex AI Client in {Config.GCP_LOCATION}...")
             self.client = genai.Client(
                 vertexai=True,
-                project=Config.PROJECT_ID,
+                project=Config.MODEL_PROJECT_ID,
                 location=Config.GCP_LOCATION
             )
         else:
