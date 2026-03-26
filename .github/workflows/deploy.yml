@@ -36,4 +36,12 @@ jobs:
             --region ${{ env.REGION }} \
             --platform managed \
             --allow-unauthenticated \
-          --set-env-vars="USE_VERTEX_AI=True,GCP_LOCATION=${{ env.REGION }},GCP_PROJECT_ID=${{ env.PROJECT_ID }},FIRESTORE_DATABASE=(default)"
+            --set-env-vars="USE_VERTEX_AI=True,GCP_LOCATION=${{ env.REGION }},GCP_PROJECT_ID=${{ env.PROJECT_ID }},FIRESTORE_DATABASE=(default)"
+
+      - name: Deploy to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.GCP_SA_KEY }}
+          projectId: hkjc-v2
+          channelId: live

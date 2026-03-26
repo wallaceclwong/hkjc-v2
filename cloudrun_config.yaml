@@ -15,7 +15,7 @@ metadata:
   generation: 3
   labels:
     cloud.googleapis.com/location: us-central1
-  name: hkjc-predictor-v3
+  name: hkjc-predictor
   namespace: '386233903900'
   resourceVersion: AAZN1MK2VJ0
   selfLink: /apis/serving.knative.dev/v1/namespaces/386233903900/services/hkjc-predictor-v3
@@ -36,11 +36,11 @@ spec:
       containers:
       - env:
         - name: GCP_PROJECT_ID
-          value: project-6172aadc-bdc0-43ee-8ac
+          value: hkjc-v2
         - name: USE_FIRESTORE
           value: 'true'
         - name: VERTEX_AI_PROJECT
-          value: project-6172aadc-bdc0-43ee-8ac
+          value: hkjc-v2
         - name: VERTEX_AI_LOCATION
           value: us-central1
         image: us-central1-docker.pkg.dev/project-6172aadc-bdc0-43ee-8ac/cloud-run-source-deploy/hkjc-predictor-v3:latest
