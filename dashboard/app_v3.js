@@ -22,10 +22,13 @@ function tickClock() {
 tickClock();
 setInterval(tickClock, 1000);
 
-// Set date in top bar
-const now = new Date();
-document.getElementById('topbar-date').textContent =
-    now.toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', year:'numeric' });
+// ─── UTILS ───────────────────────────────────────────────────────────────────
+function formatDate(dateStr) {
+    if (!dateStr) return '';
+    const [y, m, d] = dateStr.split('-');
+    const date = new Date(y, m - 1, d);
+    return date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+}
 
 // ─── FAB REFRESH ─────────────────────────────────────────────────────────────
 document.getElementById('fab-refresh').addEventListener('click', async () => {
@@ -119,6 +122,7 @@ function setConnected(ok) {
 function renderVenueHeader() {
     const venueMap = { ST: 'SHA TIN', HV: 'HAPPY VALLEY' };
     document.getElementById('topbar-venue').textContent = venueMap[meetingVenue] || meetingVenue || 'MEETING';
+    document.getElementById('topbar-date').textContent = formatDate(meetingDate);
 }
 
 // ─── RACE TABS ───────────────────────────────────────────────────────────────
