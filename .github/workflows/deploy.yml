@@ -9,6 +9,7 @@ env:
   PROJECT_ID: hkjc-v2
   SERVICE_NAME: hkjc-predictor
   REGION: us-central1
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   deploy:
@@ -36,7 +37,7 @@ jobs:
             --region ${{ env.REGION }} \
             --platform managed \
             --allow-unauthenticated \
-            --set-env-vars="USE_VERTEX_AI=True,GCP_LOCATION=${{ env.REGION }},GCP_PROJECT_ID=${{ env.PROJECT_ID }},FIRESTORE_DATABASE=(default)"
+            --set-env-vars="USE_VERTEX_AI=True,GCP_LOCATION=${{ env.REGION }},GCP_PROJECT_ID=${{ env.PROJECT_ID }},FIRESTORE_DATABASE=(default),USE_FIRESTORE=true"
 
       - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0

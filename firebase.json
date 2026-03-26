@@ -1,0 +1,37 @@
+{
+  "hosting": {
+    "public": "dashboard",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "/latest/**",
+        "run": {
+          "serviceId": "hkjc-predictor",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/picks/**",
+        "run": {
+          "serviceId": "hkjc-predictor",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/execution/**",
+        "run": {
+          "serviceId": "hkjc-predictor",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}
