@@ -1,7 +1,12 @@
 // ─── HKJC AI — Race Day Dashboard v4 ────────────────────────────────────────
-const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    ? 'http://localhost:8000'
-    : window.location.origin;
+const API = (() => {
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') return 'http://localhost:8000';
+    if (host === 'hkjc-predictor-v3.web.app' || host === 'hkjc-predictor-v3.firebaseapp.com') {
+        return 'https://hkjc-predictor-mj2mcbfjxq-uc.a.run.app';
+    }
+    return window.location.origin;
+})();
 
 const POLL_MS = 5000;
 

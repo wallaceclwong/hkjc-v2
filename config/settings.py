@@ -38,6 +38,7 @@ class Config:
     COL_ANALYTICAL = "analytical"
     COL_RESULTS = "results"
     COL_WEATHER = "weather_intel"
+    COL_MARKET_ALERTS = "market_alerts"
 
     # Backfill Config
     BACKFILL_BATCH_SIZE = 5

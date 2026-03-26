@@ -131,6 +131,27 @@ async def debug_firestore():
         
     return status
 
+@app.get("/debug/firestore/live")
+async def debug_firestore_live():
+    """Returns raw alert counts and document IDs from Firestore."""
+    try:
+        if not firestore.db:
+            return {"error": "Firestore not initialized"}
+            
+        cols = [c.id for c in firestore.db.collections()]
+        alerts_ref = firestore.db.collection(Config.COL_MARKET_ALERTS)
+        docs = [d.id for d in alerts_ref.limit(5).stream()]
+        
+        return {
+            "project_id": Config.PROJECT_ID,
+            "database": Config.FIRESTORE_DATABASE,
+            "collections": cols,
+            "recent_alerts": docs,
+            "success": True
+        }
+    except Exception as e:
+        return {"error": str(e), "success": False}
+
 def get_current_meeting_info():
     """Robustly identifies tonight's or the latest meeting venue and date."""
     today_str = datetime.now(HK_TZ).strftime("%Y-%m-%d")
@@ -199,12 +220,12 @@ async def get_latest():
             with open(p_file, "r", encoding="utf-8") as f:
                 latest_pred = json.load(f)
         elif USE_FIRESTORE:
-            # Fallback to Firestore for Cloud Run
-            latest_preds = firestore.query(Config.COL_PREDICTIONS, order_by=("__name__", "DESCENDING"), limit=1)
-            if latest_preds:
-                latest_pred = latest_preds[0]
+            # Fallback to Firestore (Avoid order_by which can cause index-missing errors)
+            all_preds = firestore.query(Config.COL_PREDICTIONS, limit=100)
+            if all_preds:
+                all_preds.sort(key=lambda x: x.get("race_id", ""), reverse=True)
+                latest_pred = all_preds[0]
             else:
-                 # Try document ID ordering if field isn't indexed
                  latest_pred = firestore.get_latest(Config.COL_PREDICTIONS)
 
         # 2. Latest Weather Intelligence
@@ -228,6 +249,17 @@ async def get_latest():
         if m_file:
             with open(m_file, "r", encoding="utf-8") as f:
                 alerts_list += json.load(f).get("alerts", [])
+        
+        # Firestore Fallback for Alerts
+        if not alerts_list and USE_FIRESTORE:
+            # Simple query on dedicated alerts collection (automatic single-field index)
+            # Fetch all alerts and process in Python (Avoids all index/key issues)
+            f_alerts = firestore.query(Config.COL_MARKET_ALERTS)
+            if f_alerts:
+                # Sort by updated_at descending
+                f_alerts.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
+                alerts_list += f_alerts[0].get("alerts", [])
+                logger.info(f"✅ Retrieved latest live alerts from Firestore: {f_alerts[0].get('race_id')}")
         
         alerts_list.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
         all_alerts = alerts_list[:10]

@@ -13,6 +13,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config.settings import Config
 from services.odds_ingest import OddsIngest
 from services.browser_manager import BrowserManager
+from services.firestore_service import FirestoreService
 
 class MarketWatchdog:
     def __init__(self, drop_threshold=0.20):
@@ -26,6 +27,7 @@ class MarketWatchdog:
         self.data_dir = Config.BASE_DIR / "data/alerts"
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.last_heartbeat = None
+        self.firestore = FirestoreService()
 
     async def poll_and_detect(self, race_no: int, venue: str = "ST"):
         """
@@ -102,6 +104,21 @@ class MarketWatchdog:
                 "updated_at": datetime.now().isoformat(),
                 "alerts": list(combined.values())
             }, f, indent=2)
+        
+        # 3. Sync to Firestore (Dedicated alerts collection)
+        try:
+            self.firestore.upsert(
+                Config.COL_MARKET_ALERTS, 
+                race_id, 
+                {
+                    "race_id": race_id,
+                    "updated_at": datetime.now().isoformat(),
+                    "alerts": list(combined.values())
+                }
+            )
+            logger.info(f"✅ Market alerts synced to Firestore: {race_id}")
+        except Exception as e:
+            logger.error(f"⚠️ Failed to sync alerts to Firestore: {e}")
 
     async def run_loop(self, race_no: int, venue: str = "ST", interval=120):
         """
