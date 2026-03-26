@@ -40,8 +40,8 @@ graph TD
 
 ### 🖥️ Compute Layers
 *   **Local (Asus PC)**: Primary hub for heavy data processing, backtesting, and development.
-*   **Vultr VM (`45.32.255.155`)**: A lightweight staging server running a 24/7 background watchdog. It hosts the "Private" version of the dashboard on port `8080`.
-*   **Google Cloud Run**: The production-grade "Public" dashboard. It scales automatically and connects directly to Firestore for real-time race data.
+*   **Vultr VM (`45.32.255.155`)**: The "Engine Room." Runs the 24/7 background `MarketWatchdog` and `DailyRunner`. It acts as the **Real-Time Data Producer**, syncing live odds and alerts directly to Firestore.
+*   **Google Cloud Run**: The "Public Showroom." A production-grade dashboard that pulls data from Firestore. It provides a scalable, fast interface for the public at `hkjc-predictor-v3.web.app`.
 
 ### 🗄️ Storage & Data Management
 *   **Google Firestore**: The single source of truth. All predictions, odds, and track conditions are synced here to ensure consistency across Local, VM, and Cloud environments.
