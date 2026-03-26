@@ -17,23 +17,16 @@ class BettingEvaluator:
         self.unit_stake = 10.0  # Default $10 unit stake for calculations
         self.bigquery = BigQueryService()
 
-    def evaluate_day(self, date_str: str, venue: str):
-        """Evaluates all predictions for a specific race day."""
-        print(f"\n===== Performance Report: {date_str} ({venue}) =====")
-        print(f"{'Race':<6} | {'Bet':<15} | {'Result':<10} | {'P&L ($)':<10} | {'ROI (%)':<10}")
-        print("-" * 65)
-
-        total_stake = 0
-        total_profit = 0
-        races_evaluated = 0
-
+    def evaluate_day(self, date_str: str, venue: str) -> List[Dict]:
+        """Evaluates all predictions for a specific race day and returns structured data."""
+        results_list = []
+        
         # Look for prediction files for this date
         pattern = f"prediction_{date_str}_{venue}_R*.json"
         prediction_files = sorted(list(self.predictions_dir.glob(pattern)), key=lambda x: int(x.stem.split('_R')[-1]))
 
         if not prediction_files:
-            print(f"No predictions found for {date_str}")
-            return
+            return []
 
         for pred_file in prediction_files:
             try:
@@ -50,18 +43,14 @@ class BettingEvaluator:
                 # Load results
                 result_file = self.results_dir / f"results_{race_id}.json"
                 if not result_file.exists():
-                    # print(f"  R{race_no}: Result data missing.")
                     continue
 
                 with open(result_file, "r", encoding="utf-8") as f:
                     result_data = json.load(f)
 
                 # Use Kelly stake if available, otherwise unit stake
-                probabilities = pred_data.get("probabilities", {})
                 kelly_stakes = pred_data.get("kelly_stakes", {})
                 
-                # Check if the recommended bet has a specific Kelly stake
-                # Recommended bet might be "WIN 5", so we extract "5"
                 import re
                 numbers = re.findall(r'\d+', rec_bet)
                 selection = numbers[0] if numbers else ""
@@ -75,6 +64,7 @@ class BettingEvaluator:
                 profit_dividend = self.calculate_profit(rec_bet, result_data["dividends"])
                 
                 status = "WIN" if profit_dividend > 0 else "LOSS"
+                status_icon = "✅" if status == "WIN" else "❌"
                 
                 # HKJC dividends are per $10 stake. Normalizing profit.
                 gross_payout = (profit_dividend / 10.0) * stake if status == "WIN" else 0.0
@@ -84,23 +74,49 @@ class BettingEvaluator:
                 # Cloud Sync (BigQuery)
                 self.bigquery.update_prediction_roi(race_id, roi, selection)
 
-                print(f"R{race_no:<5} | {rec_bet:<15} | {status:<10} | {p_l:<10.2f} | {roi:<10.1f}%")
-
-                total_stake += stake
-                total_profit += gross_payout
-                races_evaluated += 1
+                results_list.append({
+                    "race_no": race_no,
+                    "race_id": race_id,
+                    "result": f"{status_icon} {status}",
+                    "ai_top_pick": rec_bet,
+                    "kelly_stake": stake,
+                    "p_l": round(p_l, 2),
+                    "roi": round(roi, 1),
+                    "analysis": pred_data.get("analysis_markdown", "").split('\n')[0][:80] + "..." # Snippet
+                })
 
             except Exception as e:
                 print(f"Error evaluating {pred_file.name}: {e}")
 
-        if races_evaluated > 0:
-            net_p_l = total_profit - total_stake
-            overall_roi = (net_p_l / total_stake) * 100
-            print("-" * 65)
-            print(f"SUMMARY: {races_evaluated} Races | Stake: ${total_stake:.0f} | Return: ${total_profit:.2f} | Net: ${net_p_l:.2f}")
-            print(f"TOTAL ROI: {overall_roi:.1f}%")
-        else:
-            print("No valid races with both predictions and results found.")
+        return results_list
+
+    def format_markdown_report(self, date_str: str, venue: str, results_list: List[Dict]) -> str:
+        """Formats the results list into a pretty Markdown table."""
+        if not results_list:
+            return "No valid results found for this meeting."
+            
+        total_stake = sum(r['kelly_stake'] for r in results_list)
+        total_p_l = sum(r['p_l'] for r in results_list)
+        total_return = total_stake + total_p_l
+        overall_roi = (total_p_l / total_stake * 100) if total_stake > 0 else 0
+        
+        report = f"# Performance Report: {date_str} ({venue})\n\n"
+        report += "## Summary Metrics\n"
+        report += f"- **Total Races**: {len(results_list)}\n"
+        report += f"- **Total Stake**: ${total_stake:.2f}\n"
+        report += f"- **Total Return**: ${total_return:.2f}\n"
+        report += f"- **Net Profit**: ${total_p_l:.2f}\n"
+        report += f"- **Overall ROI**: {overall_roi:.1f}%\n\n"
+        
+        report += "## Detailed Results Breakdown\n\n"
+        report += "| Race | Result | AI Top Pick | Kelly Pick | P&L ($) | ROI (%) | Analysis |\n"
+        report += "| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n"
+        
+        for r in results_list:
+            k_stake = f"${r['kelly_stake']:.2f}" if r['kelly_stake'] > 10 else "--"
+            report += f"| R{r['race_no']} | {r['result']} | {r['ai_top_pick']} | {k_stake} | ${r['p_l']:.2f} | {r['roi']}% | {r['analysis']} |\n"
+            
+        return report
 
     def calculate_profit(self, rec_bet: str, dividends: Dict[str, Any]) -> float:
         """
@@ -150,9 +166,11 @@ class BettingEvaluator:
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Evaluate Betting Performance")
-    parser.add_argument("--date", type=str, default="2026-03-15", help="Date in YYYY-MM-DD format")
+    parser.add_argument("--date", type=str, default="2026-03-22", help="Date in YYYY-MM-DD format")
     parser.add_argument("--venue", type=str, default="ST", help="Venue (ST or HV)")
     args = parser.parse_args()
 
     evaluator = BettingEvaluator()
-    evaluator.evaluate_day(args.date, args.venue)
+    data = evaluator.evaluate_day(args.date, args.venue)
+    report = evaluator.format_markdown_report(args.date, args.venue, data)
+    print(report)

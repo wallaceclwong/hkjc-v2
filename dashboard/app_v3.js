@@ -55,10 +55,12 @@ document.getElementById('fab-refresh').addEventListener('click', async () => {
 // ─── MAIN POLL ───────────────────────────────────────────────────────────────
 async function poll() {
     try {
-        // Fetch picks + weather/health in parallel
+        const urlPicks = meetingDate ? `${API}/picks?date=${meetingDate}` : `${API}/picks/upcoming`;
+        const urlLatest = `${API}/latest?t=${Date.now()}${meetingDate ? `&date=${meetingDate}` : ''}`;
+        
         const [picksResp, latestResp] = await Promise.all([
-            fetch(`${API}/picks/upcoming`),
-            fetch(`${API}/latest?t=${Date.now()}`)
+            fetch(urlPicks),
+            fetch(urlLatest)
         ]);
 
         const picksData  = await picksResp.json();
@@ -79,9 +81,11 @@ async function poll() {
                 }
             }
 
-            // Robust Date/Venue detection
-            meetingDate = picksData.date || allPicks[0]?.race_id?.split('_')[0] || '';
-            meetingVenue= allPicks[0]?.race_id?.split('_')[1] || '';
+            // Only update meeting date if not manually selected
+            if (!meetingDates.includes(meetingDate)) {
+                meetingDate = picksData.date || allPicks[0]?.race_id?.split('_')[0] || '';
+            }
+            meetingVenue = picksData.venue || allPicks[0]?.race_id?.split('_')[1] || '';
             
             console.log(`[Dashboard] Meeting: ${meetingDate} (${meetingVenue})`);
             renderVenueHeader();
@@ -130,7 +134,55 @@ function setConnected(ok) {
 function renderVenueHeader() {
     const venueMap = { ST: 'SHA TIN', HV: 'HAPPY VALLEY' };
     document.getElementById('topbar-venue').textContent = venueMap[meetingVenue] || meetingVenue || 'MEETING';
-    document.getElementById('topbar-date').textContent = formatDate(meetingDate);
+    
+    // Replace static date with a selector if we have multiple meetings
+    const dateEl = document.getElementById('topbar-date');
+    if (meetingDates.length > 1) {
+        let select = document.getElementById('meeting-selector');
+        if (!select) {
+            select = document.createElement('select');
+            select.id = 'meeting-selector';
+            select.style.background = 'none';
+            select.style.color = 'inherit';
+            select.style.border = 'none';
+            select.style.fontSize = 'inherit';
+            select.style.fontFamily = 'inherit';
+            select.style.cursor = 'pointer';
+            select.style.fontWeight = '700';
+            select.onchange = (e) => switchMeeting(e.target.value);
+            dateEl.innerHTML = '';
+            dateEl.appendChild(select);
+        }
+        
+        select.innerHTML = meetingDates.map(d => `<option value="${d}" ${d === meetingDate ? 'selected' : ''}>${formatDate(d)}</option>`).join('');
+    } else {
+        dateEl.textContent = formatDate(meetingDate);
+    }
+}
+
+let meetingDates = [];
+
+async function initMeetingSelector() {
+    try {
+        const resp = await fetch(`${API}/meetings`);
+        const data = await resp.json();
+        if (data.success) {
+            meetingDates = data.meetings;
+            renderVenueHeader();
+        }
+    } catch (e) { console.error('Failed to load meetings:', e); }
+}
+
+async function switchMeeting(date) {
+    if (date === meetingDate) return;
+    meetingDate = date;
+    // Reset state for new meeting
+    allPicks = [];
+    allPredictions = {};
+    currentRaceNo = 'all';
+    
+    document.getElementById('main-content').innerHTML = '<div class="loading-spinner"></div>';
+    await initDashboard(); 
 }
 
 // ─── RACE TABS ───────────────────────────────────────────────────────────────
@@ -150,6 +202,15 @@ function renderRaceTabs() {
     allBtn.textContent = 'MEETING';
     allBtn.onclick = () => selectRace('all');
     container.appendChild(allBtn);
+
+    // 0.5. Performance Report Tab
+    const reportBtn = document.createElement('button');
+    reportBtn.className = 'race-tab' + (currentRaceNo === 'report' ? ' active' : '');
+    reportBtn.id = 'tab-report';
+    reportBtn.textContent = 'REPORT';
+    reportBtn.style.color = 'var(--accent)';
+    reportBtn.onclick = () => selectRace('report');
+    container.appendChild(reportBtn);
 
     for (let r = 1; r <= maxRace; r++) {
         const pick = allPicks.find(p => p.race_no === r);
@@ -178,6 +239,8 @@ async function selectRace(raceNo) {
     setActiveTab(raceNo);
     if (raceNo === 'all') {
         renderMeetingOverview();
+    } else if (raceNo === 'report') {
+        renderMeetingReport();
     } else {
         await renderRaceDetail(raceNo);
     }
@@ -203,6 +266,45 @@ async function renderRaceDetail(raceNo) {
     const alerts = window._lastAlerts || [];
 
     renderMain(pick, pred, alerts);
+}
+
+// ─── MEETING REPORT RENDERER ────────────────────────────────────────────────
+async function renderMeetingReport() {
+    const main = document.getElementById('main-content');
+    main.innerHTML = '<div class="loading-spinner"></div><div style="text-align:center;margin-top:20px">Generating Performance Report...</div>';
+
+    try {
+        const resp = await fetch(`${API}/reports/${meetingDate}/${meetingVenue}`);
+        const data = await resp.json();
+
+        if (data.success && data.report) {
+            const md = data.report.markdown;
+            // Simple MD to HTML conversion
+            const html = md
+                .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+                .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+                .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\|/g, '') // Basic table cleanup
+                .replace(/\n\n/g, '<br><br>')
+                .replace(/\n/g, '<br>');
+
+            main.innerHTML = `
+                <div class="report-container" style="padding:20px; background:var(--bg2); border-radius:12px; line-height:1.6">
+                    ${html}
+                </div>
+            `;
+        } else {
+            main.innerHTML = `
+                <div style="text-align:center; padding:40px; color:var(--muted)">
+                    <h3>No Report Available Yet</h3>
+                    <p>Reports are generated ~30 minutes after the final race.</p>
+                </div>
+            `;
+        }
+    } catch (e) {
+        main.innerHTML = `<div class="error">Failed to load report: ${e}</div>`;
+    }
 }
 
 // ─── MAIN CONTENT RENDERER ───────────────────────────────────────────────────

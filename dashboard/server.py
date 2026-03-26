@@ -316,6 +316,69 @@ async def get_latest():
         print(f"ERR: {str(e)}")
         return {"success": False, "error": str(e)}
 
+@app.get("/meetings")
+async def list_meetings():
+    """Returns a list of all dates that have predictions or reports."""
+    try:
+        dates = set()
+        
+        # 1. Check Predictions
+        if USE_FIRESTORE:
+            # We fetch a sample to find unique dates in race_ids
+            # Direct collection group query or just scanning some docs
+            docs = firestore.db.collection(Config.COL_PREDICTIONS).select(["race_id"]).limit(100).stream()
+            for d in docs:
+                rid = d.get("race_id")
+                if rid: dates.add(rid.split("_")[0])
+        else:
+            for p in DATA_DIR.glob("predictions/prediction_*.json"):
+                dates.add(p.stem.split("_")[1])
+                
+        # 2. Check Reports
+        if USE_FIRESTORE:
+            docs = firestore.db.collection(Config.COL_REPORTS).select(["meeting_date"]).stream()
+            for d in docs:
+                md = d.get("meeting_date")
+                if md: dates.add(md)
+        else:
+            for r in DATA_DIR.glob("reports/report_*.md"):
+                dates.add(r.stem.split("_")[1])
+                
+        sorted_dates = sorted(list(dates), reverse=True)
+        return {"success": True, "meetings": sorted_dates}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@app.get("/reports/{date}/{venue}")
+async def get_meeting_report(date: str, venue: str):
+    """Returns the performance report for a specific meeting."""
+    try:
+        report_id = f"{date}_{venue}"
+        
+        # 1. Try Firestore first
+        if USE_FIRESTORE:
+            report_data = firestore.get_document(Config.COL_REPORTS, report_id)
+            if report_data:
+                return {"success": True, "report": report_data}
+        
+        # 2. Local Fallback
+        report_path = DATA_DIR / "reports" / f"report_{date}_{venue}.md"
+        if report_path.exists():
+            with open(report_path, "r", encoding="utf-8") as f:
+                md_content = f.read()
+            return {
+                "success": True, 
+                "report": {
+                    "meeting_date": date,
+                    "venue": venue,
+                    "markdown": md_content
+                }
+            }
+            
+        return {"success": False, "error": "Report not found"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
 @app.get("/prediction/{race_id}")
 async def get_specific_prediction(race_id: str):
     """Fetches a specific prediction by ID (e.g. 2026-03-18_HV_R1)."""
@@ -408,35 +471,40 @@ def load_horse_names(race_date: str, race_no: int) -> dict:
 
     return {}
 
+@app.get("/picks")
 @app.get("/picks/upcoming")
-async def get_upcoming_top_picks():
-    """Returns the top pick (highest probability) for each race of the upcoming meeting."""
+async def get_upcoming_top_picks(date: str = None):
+    """Returns the top pick for each race of the meeting (specific date or upcoming)."""
     try:
-        # Target date for the next major meeting
         pred_dir = DATA_DIR / "predictions"
         top_picks = []
-        target_date = datetime.now().strftime("%Y-%m-%d")
+        target_date = date
         pred_files = []
 
-        if pred_dir.exists():
-            # 1. Try today's date
-            target_date = datetime.now().strftime("%Y-%m-%d")
-            pred_files = list(pred_dir.glob(f"prediction_{target_date}_*.json"))
-            
-            # 2. If empty, try tomorrow's date
-            if not pred_files:
-                target_date = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+        if not target_date:
+            # Original auto-detect logic
+            if pred_dir.exists():
+                # 1. Try today's date
+                target_date = datetime.now().strftime("%Y-%m-%d")
                 pred_files = list(pred_dir.glob(f"prediction_{target_date}_*.json"))
-            
-            # 3. If still empty, find the most recent meeting date from files
-            if not pred_files:
-                all_preds = list(pred_dir.glob("prediction_*.json"))
-                if all_preds:
-                    # Sort by filename descending (latest date first)
-                    all_preds.sort(key=lambda x: x.name, reverse=True)
-                    target_date = all_preds[0].name.split("_")[1] # prediction_YYYY-MM-DD_...
+                
+                # 2. If empty, try tomorrow's date
+                if not pred_files:
+                    target_date = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
                     pred_files = list(pred_dir.glob(f"prediction_{target_date}_*.json"))
-                    print(f"[INFO] No files for tomorrow. Found next meeting: {target_date}")
+                
+                # 3. If still empty, find the most recent meeting date from files
+                if not pred_files:
+                    all_preds = list(pred_dir.glob("prediction_*.json"))
+                    if all_preds:
+                        # Sort by filename descending (latest date first)
+                        all_preds.sort(key=lambda x: x.name, reverse=True)
+                        target_date = all_preds[0].name.split("_")[1] # prediction_YYYY-MM-DD_...
+                        pred_files = list(pred_dir.glob(f"prediction_{target_date}_*.json"))
+                        print(f"[INFO] No files for tomorrow. Found next meeting: {target_date}")
+        else:
+            # Use specific date
+            pred_files = list(pred_dir.glob(f"prediction_{target_date}_*.json"))
 
         # Firestore Fallback for picks
         if not pred_files and USE_FIRESTORE:
