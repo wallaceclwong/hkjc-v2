@@ -37,7 +37,7 @@ class Config:
     COL_PREDICTIONS = "predictions"
     COL_ANALYTICAL = "analytical"
     COL_RESULTS = "results"
-    COL_WEATHER = "weather"
+    COL_WEATHER = "weather_intel"
 
     # Backfill Config
     BACKFILL_BATCH_SIZE = 5
