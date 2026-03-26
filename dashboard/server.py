@@ -140,9 +140,10 @@ def get_current_meeting_info():
     try:
         # 1. Try to find a doc for today specifically (prefix search)
         # Using id ordering (None as order_by) to bypass field indexing issues
+        # Use race_id field instead of document name to avoid __key__ filter issues
         today_preds = firestore.query(
             Config.COL_PREDICTIONS, 
-            filters=[("__name__", ">=", today_str), ("__name__", "<=", today_str + "\uf8ff")],
+            filters=[("race_id", ">=", today_str), ("race_id", "<=", today_str + "\uf8ff")],
             limit=1
         )
         
@@ -403,25 +404,34 @@ async def get_upcoming_top_picks():
                     all_preds.sort(key=lambda x: x.name, reverse=True)
                     target_date = all_preds[0].name.split("_")[1] # prediction_YYYY-MM-DD_...
                     pred_files = list(pred_dir.glob(f"prediction_{target_date}_*.json"))
+                    print(f"[INFO] No files for tomorrow. Found next meeting: {target_date}")
 
         # Firestore Fallback for picks
         if not pred_files and USE_FIRESTORE:
             print("[INFO] No local prediction files. Fetching from Firestore...")
             # Approximate current target date if not found locally
             target_date = datetime.now().strftime("%Y-%m-%d")
-            # Query Firestore for predictions on this date
+            # Query Firestore for predictions on this date using the race_id field
             f_preds = firestore.query(
                 Config.COL_PREDICTIONS, 
-                filters=[("__name__", ">=", target_date), ("__name__", "<=", target_date + "\uf8ff")]
+                filters=[("race_id", ">=", target_date), ("race_id", "<=", target_date + "\uf8ff")]
             )
+            
             if not f_preds:
                 # Fallback: Find the most recent date in Firestore
-                latest_doc = firestore.get_latest(Config.COL_PREDICTIONS, order_by="race_id")
-                if latest_doc:
-                    target_date = latest_doc.id.split("_")[0]
+                latest_docs = firestore.query(
+                    Config.COL_PREDICTIONS,
+                    order_by=("race_id", "DESCENDING"),
+                    limit=1
+                )
+                if latest_docs:
+                    # Extract date from race_id (e.g. 2026-03-29_ST_R1)
+                    first_id = latest_docs[0].get("race_id") or "2026-01-01_ST_R1"
+                    target_date = first_id.split("_")[0]
+                    print(f"[INFO] Cloud fallback: Found latest meeting in Firestore: {target_date}")
                     f_preds = firestore.query(
                         Config.COL_PREDICTIONS, 
-                        filters=[("race_id", ">=", "prediction_" + target_date), ("race_id", "<=", "prediction_" + target_date + "\uf8ff")]
+                        filters=[("race_id", ">=", target_date), ("race_id", "<=", target_date + "\uf8ff")]
                     )
             
             for data in f_preds:

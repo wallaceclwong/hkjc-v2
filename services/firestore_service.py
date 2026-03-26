@@ -1,5 +1,5 @@
-import os
 from google.cloud import firestore
+from google.cloud.firestore_v1.field_path import FieldPath
 from config.settings import Config
 from loguru import logger
 
@@ -83,13 +83,28 @@ class FirestoreService:
             ref = self.db.collection(collection)
             if filters:
                 for field, op, val in filters:
+                    # Special handling for document ID filtering
+                    if field == "__name__":
+                        field = FieldPath.document_id()
+                    
                     ref = ref.where(field, op, val)
+            
             if order_by:
                 # Handle 'field' or ('field', 'desc')
                 if isinstance(order_by, tuple):
-                    ref = ref.order_by(order_by[0], direction=order_by[1])
+                    field, direction = order_by
+                    if field == "__name__":
+                        field = FieldPath.document_id()
+                    
+                    # Convert string direction to firestore constant
+                    f_dir = firestore.Query.DESCENDING if direction.upper() == "DESCENDING" else firestore.Query.ASCENDING
+                    ref = ref.order_by(field, direction=f_dir)
                 else:
-                    ref = ref.order_by(order_by)
+                    field = order_by
+                    if field == "__name__":
+                        field = FieldPath.document_id()
+                    ref = ref.order_by(field)
+            
             if limit:
                 ref = ref.limit(limit)
                 

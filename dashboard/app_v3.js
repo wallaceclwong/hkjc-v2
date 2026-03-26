@@ -74,8 +74,11 @@ async function poll() {
                 }
             }
 
-            meetingDate = picksData.date || '';
+            // Robust Date/Venue detection
+            meetingDate = picksData.date || allPicks[0]?.race_id?.split('_')[0] || '';
             meetingVenue= allPicks[0]?.race_id?.split('_')[1] || '';
+            
+            console.log(`[Dashboard] Meeting: ${meetingDate} (${meetingVenue})`);
             renderVenueHeader();
             renderRaceTabs();
         }
@@ -334,7 +337,7 @@ function renderMain(pick, pred, alerts) {
     </div>` : ''}
 
     <button class="analysis-toggle" id="analysis-toggle" onclick="toggleAnalysis()">
-      <span>▾ AI Reasoning — Gemini 2.5 Pro</span>
+      <span>▾ AI Reasoning — Gemini 1.5 Flash</span>
       <span class="analysis-arrow">▾</span>
     </button>
     <div class="analysis-body" id="analysis-body">${analysisHtml}</div>
@@ -386,6 +389,7 @@ function renderMeetingOverview() {
     <div style="margin-top: 20px; padding: 16px; background: rgba(255,193,7,0.05); border: 1px solid rgba(255,193,7,0.2); border-radius: 12px; font-size: 12px; color: var(--muted)">
         <strong>How to use:</strong> This overview shows the single highest-probability horse for each race. 
         Click on any row to view the full race analysis, market signals, and alternative betting options.
+        <div style="margin-top: 10px; opacity: 0.5; font-size: 10px; text-align: right">Build v2026.03.26.1925 (Dashboard Restoration)</div>
     </div>
     `;
 }
