@@ -21,8 +21,42 @@ class StewardAnalyser:
 class PedigreeService:
     async def get_enriched_pedigree(self, h): return {}
 class KellyCriterion:
-    def __init__(self, **kwargs): pass
-    def calculate_race_stakes(self, p, o): return {}
+    def __init__(self, bankroll: float = 10000.0, fractional_kelly: float = 0.1):
+        self.bankroll = bankroll
+        self.fractional_kelly = fractional_kelly
+
+    def calculate_race_stakes(self, probabilities: Dict[str, float], market_odds: Dict[str, float]) -> Dict[str, float]:
+        """
+        Calculates recommended stakes for each horse in a race.
+        Kelly Formula: f* = (p*o - 1) / (o - 1)
+        where:
+        - p is the probability of winning
+        - o is the decimal odds
+        """
+        stakes = {}
+        if not market_odds:
+            return stakes
+
+        for horse_no, p in probabilities.items():
+            # Ensure horse_no is a string for lookup
+            h_id = str(horse_no)
+            o = market_odds.get(h_id)
+            
+            if not o or o <= 1.0:
+                continue
+
+            # f_star = (p * o - 1) / (o - 1)
+            f_star = (p * o - 1) / (o - 1)
+            
+            if f_star > 0:
+                # Apply fractional Kelly and Multiply by bankroll
+                stake = self.bankroll * self.fractional_kelly * f_star
+                
+                # Round to nearest dollar
+                if stake >= 1.0:
+                    stakes[h_id] = round(float(stake), 0)
+        
+        return stakes
 class WeatherNextClient:
     pass
 
