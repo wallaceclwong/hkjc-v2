@@ -15,7 +15,7 @@ class Config:
     
     # AI Config
     GEMINI_MODEL = "gemini-2.5-pro"
-    USE_VERTEX_AI = True               # Vertex AI
+    USE_VERTEX_AI = os.getenv("USE_VERTEX_AI", "True").lower() == "true"
     GCP_LOCATION = "us-central1"       # Models are confirmed available here
     GCS_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME", "hkjc-vault-6172aadc")
     
