@@ -31,12 +31,18 @@ class MeetingSettlement:
         # 1. Fetch results for all races (assuming 9-11 races)
         max_races = 11 if venue == "ST" else 9
         for r in range(1, max_races + 1):
+            race_id = f"{date_str}_{venue}_R{r}"
+            filename = f"data/results/results_{race_id}.json"
+            
+            if os.path.exists(filename):
+                logger.info(f"Results for R{r} already exists locally. Skipping scrape.")
+                continue
+
             logger.info(f"Scraping results for R{r}...")
             # We use the results_ingest script's main logic or fetch_results
             try:
                 res_data = await self.results_ingest.fetch_results(date_str, venue, r)
                 if res_data:
-                    filename = f"data/results/results_{res_data['race_id']}.json"
                     os.makedirs("data/results", exist_ok=True)
                     with open(filename, "w", encoding="utf-8") as f:
                         json.dump(res_data, f, indent=2)

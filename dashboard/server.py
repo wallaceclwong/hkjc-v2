@@ -377,13 +377,7 @@ async def get_meeting_report(date: str, venue: str):
     try:
         report_id = f"{date}_{venue}"
         
-        # 1. Try Firestore first
-        if USE_FIRESTORE:
-            report_data = firestore.get_document(Config.COL_REPORTS, report_id)
-            if report_data:
-                return {"success": True, "report": report_data}
-        
-        # 2. Local Fallback
+        # 1. Try Local Fallback first (Immediate updates)
         report_path = DATA_DIR / "reports" / f"report_{date}_{venue}.md"
         if report_path.exists():
             with open(report_path, "r", encoding="utf-8") as f:
@@ -396,6 +390,12 @@ async def get_meeting_report(date: str, venue: str):
                     "markdown": md_content
                 }
             }
+
+        # 2. Try Firestore (Cloud backup)
+        if USE_FIRESTORE:
+            report_data = firestore.get_document(Config.COL_REPORTS, report_id)
+            if report_data:
+                return {"success": True, "report": report_data}
             
         return {"success": False, "error": "Report not found"}
     except Exception as e:

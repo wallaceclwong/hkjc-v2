@@ -300,25 +300,75 @@ async function renderMeetingReport() {
 
         if (data.success && data.report) {
             const md = data.report.markdown;
-            // Enhanced MD to HTML conversion
-            const html = md
-                .replace(/^# (.*$)/gim, '<h1 style="color:var(--gold); border-bottom:1px solid var(--border); padding-bottom:10px">$1</h1>')
-                .replace(/^## (.*$)/gim, '<h2 style="margin-top:20px; color:var(--gold)">$1</h2>')
-                .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                // Table handling (v. basic)
-                .replace(/\|/g, '<span style="color:var(--border)">|</span>')
-                .replace(/\n\n/g, '<br><br>')
-                .replace(/\n/g, '<br>');
+            // Professional Markdown Parser
+            function parseMD(md) {
+                const lines = md.split('\n');
+                let html = '';
+                let inTable = false;
+
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    
+                    // Table detection
+                    if (line.startsWith('|') && line.includes('|')) {
+                        if (!inTable) {
+                            html += '<table class="report-table">';
+                            inTable = true;
+                        }
+                        const cells = line.split('|').filter(c => c !== '');
+                        if (line.includes('---')) continue; // Skip separator
+
+                        if (html.endsWith('<table class="report-table">')) {
+                            html += '<thead><tr>' + cells.map(c => `<th>${c.trim()}</th>`).join('') + '</tr></thead><tbody>';
+                        } else {
+                            html += '<tr>' + cells.map(c => {
+                                let txt = c.trim();
+                                let cls = '';
+                                if (txt.includes('✅')) cls = 'win';
+                                if (txt.includes('❌')) cls = 'loss';
+                                if (txt.includes('%') && (txt.includes('-') || txt.includes('+'))) {
+                                    cls = txt.includes('-') ? 'roi-neg' : 'roi-pos';
+                                }
+                                return `<td class="${cls}">${txt}</td>`;
+                            }).join('') + '</tr>';
+                        }
+                        continue;
+                    } else if (inTable) {
+                        html += '</tbody></table>';
+                        inTable = false;
+                    }
+
+                    // Headers
+                    if (line.startsWith('# ')) {
+                        html += `<h1 style="color:var(--gold); border-bottom:1px solid var(--border); padding-bottom:10px; margin-bottom:20px">${line.slice(2)}</h1>`;
+                    } else if (line.startsWith('## ')) {
+                        html += `<h2 style="margin-top:30px; margin-bottom:15px; color:var(--gold); font-size:16px; border-left:3px solid var(--gold); padding-left:12px">${line.slice(3)}</h2>`;
+                    } else if (line.startsWith('### ')) {
+                        html += `<h3 style="margin-top:20px; margin-bottom:10px; color:var(--text); font-size:14px">${line.slice(4)}</h3>`;
+                    } else {
+                        // Inline formatting
+                        let currentLine = line
+                            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                            .replace(/\*(.*?)\*/g, '<em>$1</em>');
+                        
+                        if (currentLine) html += `<p style="margin-bottom:8px">${currentLine}</p>`;
+                        else html += '<br>';
+                    }
+                }
+                if (inTable) html += '</tbody></table>';
+                return html;
+            }
 
             main.innerHTML = `
-                <div class="report-container" style="padding:20px; background:var(--bg2); border-radius:12px; line-height:1.6; font-family:'JetBrains Mono', monospace; font-size:13px">
-                    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px">
-                        <button class="btn btn-stage" id="btn-settle" style="padding:6px 14px; font-size:11px" onclick="settleMeeting()">⚡ RE-SETTLE (FORCE)</button>
-                        <button class="btn btn-copy" style="font-size:11px" onclick="selectRace('report')">&#8635; REFRESH</button>
+                <div class="report-container" style="padding:24px; background:var(--surface); border:1px solid var(--border); border-radius:16px; line-height:1.6; font-family:'Inter', sans-serif;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; padding-bottom:12px; border-bottom:1px solid var(--border)">
+                        <div style="font-size:10px; font-weight:800; color:var(--muted); letter-spacing:1px">PERFORMANCE INTELLIGENCE</div>
+                        <div style="display:flex; gap:8px">
+                            <button class="btn btn-stage" id="btn-settle" style="padding:6px 14px; font-size:11px" onclick="settleMeeting()">⚡ RE-SETTLE (FORCE)</button>
+                            <button class="btn btn-copy" style="font-size:11px" onclick="selectRace('report')">&#8635; REFRESH</button>
+                        </div>
                     </div>
-                    ${html}
+                    ${parseMD(md)}
                 </div>
             `;
         } else {

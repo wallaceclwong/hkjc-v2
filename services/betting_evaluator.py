@@ -56,34 +56,36 @@ class BettingEvaluator:
                 numbers = re.findall(r'\d+', rec_bet)
                 selection = numbers[0] if numbers else ""
                 
-                stake = kelly_stakes.get(selection, self.unit_stake) if selection else self.unit_stake
+                # Use 0.0 as default if Kelly didn't bet
+                stake = kelly_stakes.get(selection, 0.0)
                 
-                # If Kelly stake is explicitly 0, skip
-                if selection in kelly_stakes and stake == 0:
-                    continue
-
-                profit_dividend = self.calculate_profit(rec_bet, result_data["dividends"])
+                ai_roi = 0.0
+                profit_dividend = self.calculate_profit(rec_bet, result_data)
+                ai_p_l = profit_dividend - 10.0 if profit_dividend > 0 else -10.0
+                ai_roi = (ai_p_l / 10.0) * 100
                 
+                # 2. Kelly ROI (Actual stake)
                 status = "WIN" if profit_dividend > 0 else "LOSS"
                 status_icon = "✅" if status == "WIN" else "❌"
                 
-                # HKJC dividends are per $10 stake. Normalizing profit.
-                gross_payout = (profit_dividend / 10.0) * stake if status == "WIN" else 0.0
+                # Normalized profit for Kelly
+                gross_payout = (profit_dividend / 10.0) * stake if (status == "WIN" and stake > 0) else 0.0
                 p_l = gross_payout - stake
-                roi = (p_l / stake) * 100
-                
-                # Cloud Sync (BigQuery)
-                self.bigquery.update_prediction_roi(race_id, roi, selection)
+                kelly_roi = (p_l / stake * 100) if stake > 0 else 0.0
 
+                # Extract official winner
+                official_win = next((h["horse_no"] for h in result_data.get("results", []) if h.get("plc") == "1"), "")
+                
                 results_list.append({
                     "race_no": race_no,
                     "race_id": race_id,
-                    "result": f"{status_icon} {status}",
+                    "official_result": f"WIN {official_win}" if official_win else "--",
+                    "result_status": f"{status_icon} {status}",
                     "ai_top_pick": rec_bet,
                     "kelly_stake": stake,
                     "p_l": round(p_l, 2),
-                    "roi": round(roi, 1),
-                    "analysis": pred_data.get("analysis_markdown", "").split('\n')[0][:80] + "..." # Snippet
+                    "ai_roi": round(ai_roi, 1),
+                    "kelly_roi": round(kelly_roi, 1)
                 })
 
             except Exception as e:
@@ -99,9 +101,15 @@ class BettingEvaluator:
         total_stake = sum(r['kelly_stake'] for r in results_list)
         total_p_l = sum(r['p_l'] for r in results_list)
         total_return = total_stake + total_p_l
-        overall_roi = (total_p_l / total_stake * 100) if total_stake > 0 else 0
+        overall_kelly_roi = (total_p_l / total_stake * 100) if total_stake > 0 else 0
         
-        wins = sum(1 for r in results_list if "WIN" in r['result'])
+        # AI Fixed ROI (Assuming $10 unit bet on every race)
+        total_ai_stake = len(results_list) * 10.0
+        # Re-calculate AI P&L to get accurate total
+        total_ai_p_l = sum((r['ai_roi'] / 100.0) * 10.0 for r in results_list)
+        overall_ai_roi = (total_ai_p_l / total_ai_stake * 100) if total_ai_stake > 0 else 0
+
+        wins = sum(1 for r in results_list if "WIN" in r['result_status'])
         win_rate = (wins / len(results_list) * 100) if results_list else 0
         
         # Color the net profit
@@ -112,32 +120,41 @@ class BettingEvaluator:
         report += "## 📈 Summary Metrics\n"
         report += f"| Metric | Value |\n"
         report += f"| :--- | :--- |\n"
-        report += f"| **Total Races Bet** | {len(results_list)} |\n"
+        report += f"| **Total Races** | {len(results_list)} |\n"
         report += f"| **Win Rate** | {win_rate:.1f}% ({wins}/{len(results_list)}) |\n"
-        report += f"| **Total Stake** | ${total_stake:,.2f} |\n"
-        report += f"| **Total Return** | ${total_return:,.2f} |\n"
-        report += f"| **Net Profit** | {p_l_color} **${total_p_l:,.2f}** |\n"
-        report += f"| **Overall ROI** | **{overall_roi:.1f}%** |\n\n"
+        report += f"| **Total Kelly Stake** | ${total_stake:,.2f} |\n"
+        report += f"| **Net Profit (Kelly)** | {p_l_color} **${total_p_l:,.2f}** |\n"
+        report += f"| **Overall AI ROI** | **{overall_ai_roi:.1f}%** |\n"
+        report += f"| **Overall Kelly ROI**| **{overall_kelly_roi:.1f}%** |\n\n"
         
         report += "## 🏁 Detailed Results Breakdown\n\n"
-        report += "| Race No | AI Pick | Result of AI Pick | Kelly Stake | Result of Kelly Stake | ROI (%) | Analysis Snippet |\n"
+        report += "| Race No | Official Result | AI Pick | Kelly Stake | Kelly Result | ROI (AI) | ROI (Kelly) |\n"
         report += "| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n"
         
         for r in results_list:
             k_stake = f"**${r['kelly_stake']:,.2f}**" if r['kelly_stake'] > 10 else f"${r['kelly_stake']:,.2f}"
             p_l_str = f"**${r['p_l']:,.2f}**" if r['p_l'] > 0 else f"${r['p_l']:,.2f}"
             
-            report += f"| **R{r['race_no']}** | {r['ai_top_pick']} | {r['result']} | {k_stake} | {p_l_str} | {r['roi']}% | *{r['analysis']}* |\n"
+            # Combine icon with top pick for clarity
+            ai_pick_with_status = f"{r['result_status']} {r['ai_top_pick']}"
+            
+            # Format ROIs with signs
+            ai_roi_str = f"+{r['ai_roi']}%" if r['ai_roi'] > 0 else f"{r['ai_roi']}%"
+            k_roi_str = f"+{r['kelly_roi']}%" if r['kelly_roi'] > 0 else f"{r['kelly_roi']}%"
+            if r['kelly_stake'] == 0: k_roi_str = "--"
+
+            report += f"| **R{r['race_no']}** | {r['official_result']} | {ai_pick_with_status} | {k_stake} | {p_l_str} | {ai_roi_str} | {k_roi_str} |\n"
             
         report += f"\n\n*Report generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*"
         return report
 
-    def calculate_profit(self, rec_bet: str, dividends: Dict[str, Any]) -> float:
+    def calculate_profit(self, rec_bet: str, result_data: Dict[str, Any]) -> float:
         """
         Calculates the gross payout for a specific bet.
         Handles variations like "WIN 9", "WIN - Horse 5", "QUINELLA 3-10"
         """
         import re
+        dividends = result_data.get("dividends", {})
         
         # Clean the string and find the bet type
         rec_bet_up = rec_bet.upper()
@@ -160,8 +177,14 @@ class BettingEvaluator:
             selection = numbers[0]
             pool = dividends.get(bet_type, [])
             for div in pool:
-                if div["combination"] == selection:
+                if div.get("combination") == selection:
                     return float(div["dividend"])
+            
+            # Fallback for WIN bets: Use win_odds if dividends are missing
+            if bet_type == "WIN":
+                for res in result_data.get("results", []):
+                    if res.get("plc") == "1" and str(res.get("horse_no")) == selection:
+                        return float(res.get("win_odds", "0")) * 10.0
         
         # Handle QUINELLA (e.g., "QUINELLA 3-10")
         elif bet_type == "QUINELLA":
