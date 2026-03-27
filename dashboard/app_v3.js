@@ -84,11 +84,20 @@ async function poll() {
 
             // Only update meeting date/venue if not manually selected
             if (!userSelectedDate) {
+                const oldDate = meetingDate;
                 meetingDate = picksData.date || allPicks[0]?.race_id?.split('_')[0] || '';
                 meetingVenue = picksData.venue || allPicks[0]?.race_id?.split('_')[1] || '';
+                if (oldDate && oldDate !== meetingDate) {
+                    console.log(`[Dashboard] Auto-switched meeting: ${oldDate} -> ${meetingDate}`);
+                }
+            } else {
+                // If user selected, we still update venue from response to be sure it matches THAT date
+                if (picksData.date === meetingDate && picksData.venue) {
+                    meetingVenue = picksData.venue;
+                }
             }
             
-            console.log(`[Dashboard] Meeting: ${meetingDate} (${meetingVenue}) (UserSelected: ${userSelectedDate})`);
+            console.log(`[Dashboard] View: ${meetingDate} (${meetingVenue}) | UserLocked: ${userSelectedDate}`);
             renderVenueHeader();
             renderRaceTabs();
         }
@@ -155,9 +164,13 @@ function renderVenueHeader() {
             dateEl.appendChild(select);
         }
         
-        select.innerHTML = meetingDates.map(d => `<option value="${d}" ${d === meetingDate ? 'selected' : ''}>${formatDate(d)}</option>`).join('');
-    } else {
-        dateEl.textContent = formatDate(meetingDate);
+        select.innerHTML = meetingDates.map(m => {
+            const val = `${m.date}|${m.venue}`;
+            const isSelected = (m.date === meetingDate);
+            return `<option value="${val}" ${isSelected ? 'selected' : ''}>${formatDate(m.date)} (${m.venue})</option>`;
+        }).join('');
+    } else if (meetingDates.length === 1) {
+        dateEl.textContent = `${formatDate(meetingDates[0].date)} (${meetingDates[0].venue})`;
     }
 }
 
@@ -169,20 +182,22 @@ async function initMeetingSelector() {
         const data = await resp.json();
         if (data.success) {
             meetingDates = data.meetings;
+            console.log(`[Dashboard] Loaded ${meetingDates.length} meetings`);
             renderVenueHeader();
         }
     } catch (e) { console.error('Failed to load meetings:', e); }
 }
 
-async function switchMeeting(date) {
-    if (date === meetingDate) return;
-    meetingDate = date;
-    userSelectedDate = true;
+async function switchMeeting(val) {
+    if (!val || !val.includes('|')) return;
+    const [date, venue] = val.split('|');
+    if (date === meetingDate && venue === meetingVenue) return;
     
-    // We also need to find the venue for this date from meetingDates if it's formatted as DATE|VENUE
-    // But currently meetingDates is just [DATE, DATE]. 
-    // Let's assume the first pick of the new poll will set the correct venue.
-    // Or better, let's allow the selector to have both.
+    console.log(`[UI] User selected meeting: ${date} (${venue})`);
+    
+    meetingDate = date;
+    meetingVenue = venue;
+    userSelectedDate = true; // Lock it!
     allPicks = [];
     allPredictions = {};
     currentRaceNo = 'all';
@@ -300,7 +315,7 @@ async function renderMeetingReport() {
             main.innerHTML = `
                 <div class="report-container" style="padding:20px; background:var(--bg2); border-radius:12px; line-height:1.6; font-family:'JetBrains Mono', monospace; font-size:13px">
                     <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px">
-                        <div></div>
+                        <button class="btn btn-stage" id="btn-settle" style="padding:6px 14px; font-size:11px" onclick="settleMeeting()">⚡ RE-SETTLE (FORCE)</button>
                         <button class="btn btn-copy" style="font-size:11px" onclick="selectRace('report')">&#8635; REFRESH</button>
                     </div>
                     ${html}

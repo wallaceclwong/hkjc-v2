@@ -319,35 +319,56 @@ async def get_latest():
 
 @app.get("/meetings")
 async def list_meetings():
-    """Returns a list of all dates that have predictions or reports."""
+    """Returns a list of all meetings (date + venue) that have data."""
     try:
-        dates = set()
+        meetings_dict = {} # date -> venue
         
         # 1. Check Predictions
         if USE_FIRESTORE:
-            # We fetch a sample to find unique dates in race_ids
-            # Direct collection group query or just scanning some docs
-            docs = firestore.db.collection(Config.COL_PREDICTIONS).select(["race_id"]).limit(100).stream()
+            # Order by race_id DESC to get the latest meetings first
+            docs = firestore.db.collection(Config.COL_PREDICTIONS).order_by("race_id", direction="DESCENDING").limit(500).stream()
             for d in docs:
                 rid = d.get("race_id")
-                if rid: dates.add(rid.split("_")[0])
+                if rid:
+                    parts = rid.split("_")
+                    if len(parts) >= 2:
+                        meetings_dict[parts[0]] = parts[1]
         else:
-            for p in DATA_DIR.glob("predictions/prediction_*.json"):
-                dates.add(p.stem.split("_")[1])
+            p_dir = DATA_DIR / "predictions"
+            if p_dir.exists():
+                for p in p_dir.glob("prediction_*.json"):
+                    parts = p.stem.split("_")
+                    if len(parts) >= 3:
+                        meetings_dict[parts[1]] = parts[2]
                 
         # 2. Check Reports
         if USE_FIRESTORE:
-            docs = firestore.db.collection(Config.COL_REPORTS).select(["meeting_date"]).stream()
+            # Order by meeting_date DESC
+            docs = firestore.db.collection(Config.COL_REPORTS).order_by("meeting_date", direction="DESCENDING").limit(100).stream()
             for d in docs:
                 md = d.get("meeting_date")
-                if md: dates.add(md)
+                mv = d.get("venue")
+                if md and mv: meetings_dict[md] = mv
         else:
-            for r in DATA_DIR.glob("reports/report_*.md"):
-                dates.add(r.stem.split("_")[1])
+            r_dir = DATA_DIR / "reports"
+            if r_dir.exists():
+                for r in r_dir.glob("report_*.md"):
+                    parts = r.stem.split("_")
+                    if len(parts) >= 3:
+                        meetings_dict[parts[1]] = parts[2]
                 
-        sorted_dates = sorted(list(dates), reverse=True)
-        return {"success": True, "meetings": sorted_dates}
+        # Sort by date descending and filter for 2026 only
+        sorted_meetings = [
+            {"date": d, "venue": v} 
+            for d, v in sorted(meetings_dict.items(), key=lambda x: x[0], reverse=True)
+            if d.startswith("2026")
+        ]
+        
+        print(f"[DEBUG] Found {len(sorted_meetings)} meetings. Sample: {sorted_meetings[:1]}")
+        return {"success": True, "meetings": sorted_meetings}
+
     except Exception as e:
+        print(f"[ERROR] list_meetings failed: {e}")
         return {"success": False, "error": str(e)}
 
 @app.get("/reports/{date}/{venue}")

@@ -120,14 +120,14 @@ class BettingEvaluator:
         report += f"| **Overall ROI** | **{overall_roi:.1f}%** |\n\n"
         
         report += "## 🏁 Detailed Results Breakdown\n\n"
-        report += "| Race | Result | AI Top Pick | Kelly Stake | P&L ($) | ROI (%) | Analysis Snippet |\n"
+        report += "| Race No | AI Pick | Result of AI Pick | Kelly Stake | Result of Kelly Stake | ROI (%) | Analysis Snippet |\n"
         report += "| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n"
         
         for r in results_list:
             k_stake = f"**${r['kelly_stake']:,.2f}**" if r['kelly_stake'] > 10 else f"${r['kelly_stake']:,.2f}"
             p_l_str = f"**${r['p_l']:,.2f}**" if r['p_l'] > 0 else f"${r['p_l']:,.2f}"
             
-            report += f"| **R{r['race_no']}** | {r['result']} | {r['ai_top_pick']} | {k_stake} | {p_l_str} | {r['roi']}% | *{r['analysis']}* |\n"
+            report += f"| **R{r['race_no']}** | {r['ai_top_pick']} | {r['result']} | {k_stake} | {p_l_str} | {r['roi']}% | *{r['analysis']}* |\n"
             
         report += f"\n\n*Report generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*"
         return report
