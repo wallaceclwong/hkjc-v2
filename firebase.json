@@ -8,28 +8,35 @@
     ],
     "rewrites": [
       {
-        "source": "/latest/**",
+        "source": "/latest**",
         "run": {
           "serviceId": "hkjc-predictor",
           "region": "us-central1"
         }
       },
       {
-        "source": "/picks/**",
+        "source": "/picks**",
         "run": {
           "serviceId": "hkjc-predictor",
           "region": "us-central1"
         }
       },
       {
-        "source": "/meetings/**",
+        "source": "/meetings**",
         "run": {
           "serviceId": "hkjc-predictor",
           "region": "us-central1"
         }
       },
       {
-        "source": "/execution/**",
+        "source": "/execution**",
+        "run": {
+          "serviceId": "hkjc-predictor",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/health**",
         "run": {
           "serviceId": "hkjc-predictor",
           "region": "us-central1"
