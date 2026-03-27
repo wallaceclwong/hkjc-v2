@@ -3,6 +3,7 @@ import sys
 import json
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+from datetime import datetime
 
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -91,31 +92,44 @@ class BettingEvaluator:
         return results_list
 
     def format_markdown_report(self, date_str: str, venue: str, results_list: List[Dict]) -> str:
-        """Formats the results list into a pretty Markdown table."""
+        """Formats the results list into a pretty Markdown table with enhanced metrics."""
         if not results_list:
-            return "No valid results found for this meeting."
+            return "### 📭 No data available\nNo valid results found for this meeting."
             
         total_stake = sum(r['kelly_stake'] for r in results_list)
         total_p_l = sum(r['p_l'] for r in results_list)
         total_return = total_stake + total_p_l
         overall_roi = (total_p_l / total_stake * 100) if total_stake > 0 else 0
         
-        report = f"# Performance Report: {date_str} ({venue})\n\n"
-        report += "## Summary Metrics\n"
-        report += f"- **Total Races**: {len(results_list)}\n"
-        report += f"- **Total Stake**: ${total_stake:.2f}\n"
-        report += f"- **Total Return**: ${total_return:.2f}\n"
-        report += f"- **Net Profit**: ${total_p_l:.2f}\n"
-        report += f"- **Overall ROI**: {overall_roi:.1f}%\n\n"
+        wins = sum(1 for r in results_list if "WIN" in r['result'])
+        win_rate = (wins / len(results_list) * 100) if results_list else 0
         
-        report += "## Detailed Results Breakdown\n\n"
-        report += "| Race | Result | AI Top Pick | Kelly Pick | P&L ($) | ROI (%) | Analysis |\n"
+        # Color the net profit
+        p_l_color = "🟢" if total_p_l >= 0 else "🔴"
+        
+        report = f"# 📊 Performance Report: {date_str} ({venue})\n\n"
+        
+        report += "## 📈 Summary Metrics\n"
+        report += f"| Metric | Value |\n"
+        report += f"| :--- | :--- |\n"
+        report += f"| **Total Races Bet** | {len(results_list)} |\n"
+        report += f"| **Win Rate** | {win_rate:.1f}% ({wins}/{len(results_list)}) |\n"
+        report += f"| **Total Stake** | ${total_stake:,.2f} |\n"
+        report += f"| **Total Return** | ${total_return:,.2f} |\n"
+        report += f"| **Net Profit** | {p_l_color} **${total_p_l:,.2f}** |\n"
+        report += f"| **Overall ROI** | **{overall_roi:.1f}%** |\n\n"
+        
+        report += "## 🏁 Detailed Results Breakdown\n\n"
+        report += "| Race | Result | AI Top Pick | Kelly Stake | P&L ($) | ROI (%) | Analysis Snippet |\n"
         report += "| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n"
         
         for r in results_list:
-            k_stake = f"${r['kelly_stake']:.2f}" if r['kelly_stake'] > 10 else "--"
-            report += f"| R{r['race_no']} | {r['result']} | {r['ai_top_pick']} | {k_stake} | ${r['p_l']:.2f} | {r['roi']}% | {r['analysis']} |\n"
+            k_stake = f"**${r['kelly_stake']:,.2f}**" if r['kelly_stake'] > 10 else f"${r['kelly_stake']:,.2f}"
+            p_l_str = f"**${r['p_l']:,.2f}**" if r['p_l'] > 0 else f"${r['p_l']:,.2f}"
             
+            report += f"| **R{r['race_no']}** | {r['result']} | {r['ai_top_pick']} | {k_stake} | {p_l_str} | {r['roi']}% | *{r['analysis']}* |\n"
+            
+        report += f"\n\n*Report generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*"
         return report
 
     def calculate_profit(self, rec_bet: str, dividends: Dict[str, Any]) -> float:

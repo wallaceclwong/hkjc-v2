@@ -45,6 +45,7 @@ from firebase_admin import messaging as firebase_messaging
 from loguru import logger
 import socket
 import asyncio
+from services.meeting_settlement import MeetingSettlement
 
 HK_TZ = pytz.timezone("Asia/Hong_Kong")
 
@@ -702,6 +703,32 @@ async def force_update():
             "log": str(log_file)
         }
     except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@app.post("/execution/settle")
+async def settle_meeting(request: dict):
+    """Triggers the MeetingSettlement orchestrator for a specific date and venue."""
+    try:
+        date = request.get("date")
+        venue = request.get("venue")
+        
+        if not date or not venue:
+            return {"success": False, "error": "Missing date or venue"}
+            
+        # We run it in the background as scraping can take 1-2 minutes
+        async def run_settlement():
+            logger.info(f"🚀 Dashboard-triggered settlement for {date} ({venue})")
+            settlement = MeetingSettlement(headless=True)
+            await settlement.settle_meeting(date, venue)
+            
+        asyncio.create_task(run_settlement())
+        
+        return {
+            "success": True, 
+            "message": f"Settlement process started for {date} ({venue}). It will take ~2 minutes."
+        }
+    except Exception as e:
+        logger.error(f"Settlement failed: {e}")
         return {"success": False, "error": str(e)}
 
 @app.get("/execution/kelly_settings")

@@ -18,6 +18,7 @@ let currentRaceId = null;
 let meetingDate   = '';
 let meetingVenue  = '';
 let lastHash      = '';
+let userSelectedDate = false; 
 
 // ─── CLOCK ───────────────────────────────────────────────────────────────────
 function tickClock() {
@@ -81,13 +82,13 @@ async function poll() {
                 }
             }
 
-            // Only update meeting date if not manually selected
-            if (!meetingDates.includes(meetingDate)) {
+            // Only update meeting date/venue if not manually selected
+            if (!userSelectedDate) {
                 meetingDate = picksData.date || allPicks[0]?.race_id?.split('_')[0] || '';
+                meetingVenue = picksData.venue || allPicks[0]?.race_id?.split('_')[1] || '';
             }
-            meetingVenue = picksData.venue || allPicks[0]?.race_id?.split('_')[1] || '';
             
-            console.log(`[Dashboard] Meeting: ${meetingDate} (${meetingVenue})`);
+            console.log(`[Dashboard] Meeting: ${meetingDate} (${meetingVenue}) (UserSelected: ${userSelectedDate})`);
             renderVenueHeader();
             renderRaceTabs();
         }
@@ -176,19 +177,24 @@ async function initMeetingSelector() {
 async function switchMeeting(date) {
     if (date === meetingDate) return;
     meetingDate = date;
-    // Reset state for new meeting
+    userSelectedDate = true;
+    
+    // We also need to find the venue for this date from meetingDates if it's formatted as DATE|VENUE
+    // But currently meetingDates is just [DATE, DATE]. 
+    // Let's assume the first pick of the new poll will set the correct venue.
+    // Or better, let's allow the selector to have both.
     allPicks = [];
     allPredictions = {};
     currentRaceNo = 'all';
     
     document.getElementById('main-content').innerHTML = '<div class="loading-spinner"></div>';
-    await initDashboard(); 
+    await poll(); 
 }
 
 // ─── RACE TABS ───────────────────────────────────────────────────────────────
 function renderRaceTabs() {
     const container = document.getElementById('race-tabs');
-    const maxRace   = Math.max(...allPicks.map(p => p.race_no));
+    const maxRace   = allPicks.length > 0 ? Math.max(...allPicks.map(p => p.race_no)) : 0;
 
     // Only rebuild if count differs
     if (container.children.length === maxRace) return;
@@ -200,7 +206,7 @@ function renderRaceTabs() {
     allBtn.className = 'race-tab' + (currentRaceNo === 'all' ? ' active' : '');
     allBtn.id = 'tab-all';
     allBtn.textContent = 'MEETING';
-    allBtn.onclick = () => selectRace('all');
+    allBtn.onclick = (e) => selectRace('all');
     container.appendChild(allBtn);
 
     // 0.5. Performance Report Tab
@@ -208,8 +214,8 @@ function renderRaceTabs() {
     reportBtn.className = 'race-tab' + (currentRaceNo === 'report' ? ' active' : '');
     reportBtn.id = 'tab-report';
     reportBtn.textContent = 'REPORT';
-    reportBtn.style.color = 'var(--accent)';
-    reportBtn.onclick = () => selectRace('report');
+    reportBtn.style.color = 'var(--gold)';
+    reportBtn.onclick = (e) => selectRace('report');
     container.appendChild(reportBtn);
 
     for (let r = 1; r <= maxRace; r++) {
@@ -219,7 +225,7 @@ function renderRaceTabs() {
         btn.className = 'race-tab' + (hasStake ? ' has-stake' : '') + (r === currentRaceNo ? ' active' : '');
         btn.id = `tab-R${r}`;
         btn.textContent = `R${r}`;
-        btn.onclick = () => selectRace(r);
+        btn.onclick = (e) => selectRace(r);
         container.appendChild(btn);
     }
 }
@@ -279,31 +285,110 @@ async function renderMeetingReport() {
 
         if (data.success && data.report) {
             const md = data.report.markdown;
-            // Simple MD to HTML conversion
+            // Enhanced MD to HTML conversion
             const html = md
-                .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-                .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+                .replace(/^# (.*$)/gim, '<h1 style="color:var(--gold); border-bottom:1px solid var(--border); padding-bottom:10px">$1</h1>')
+                .replace(/^## (.*$)/gim, '<h2 style="margin-top:20px; color:var(--gold)">$1</h2>')
                 .replace(/^### (.*$)/gim, '<h3>$1</h3>')
                 .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                .replace(/\|/g, '') // Basic table cleanup
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                // Table handling (v. basic)
+                .replace(/\|/g, '<span style="color:var(--border)">|</span>')
                 .replace(/\n\n/g, '<br><br>')
                 .replace(/\n/g, '<br>');
 
             main.innerHTML = `
-                <div class="report-container" style="padding:20px; background:var(--bg2); border-radius:12px; line-height:1.6">
+                <div class="report-container" style="padding:20px; background:var(--bg2); border-radius:12px; line-height:1.6; font-family:'JetBrains Mono', monospace; font-size:13px">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px">
+                        <div></div>
+                        <button class="btn btn-copy" style="font-size:11px" onclick="selectRace('report')">&#8635; REFRESH</button>
+                    </div>
                     ${html}
                 </div>
             `;
         } else {
             main.innerHTML = `
-                <div style="text-align:center; padding:40px; color:var(--muted)">
+                <div style="text-align:center; padding:60px; color:var(--muted); background:var(--bg2); border-radius:12px">
+                    <div style="font-size:48px; margin-bottom:20px">🏁</div>
                     <h3>No Report Available Yet</h3>
-                    <p>Reports are generated ~30 minutes after the final race.</p>
+                    <p style="margin-bottom:24px">Reports are generated after results have been scraped and evaluated.</p>
+                    <button class="btn btn-stage" id="btn-settle" style="padding:12px 24px; font-weight:700" onclick="settleMeeting()">⚡ SETTLE MEETING NOW</button>
+                    <p style="font-size:11px; margin-top:16px; opacity:0.6">This will scrape official dividends and compute ROI. Reclaims ~2 mins.</p>
                 </div>
             `;
         }
     } catch (e) {
         main.innerHTML = `<div class="error">Failed to load report: ${e}</div>`;
+    }
+}
+
+async function settleMeeting() {
+    const btn = document.getElementById('btn-settle');
+    if (!btn) return;
+    
+    if (!confirm(`Trigger performance analysis for ${meetingDate} (${meetingVenue})? This takes ~2 mins.`)) return;
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinning">&#8635;</span> ANALYZING...';
+    
+    try {
+        const resp = await fetch(`${API}/execution/settle`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ date: meetingDate, venue: meetingVenue })
+        });
+        const data = await resp.json();
+        
+        if (data.success) {
+            btn.innerHTML = '✓ IN PROGRESS';
+            btn.style.background = 'var(--green)';
+
+            // Show status in report area
+            const reportContainer = document.getElementById('report-container');
+            if (reportContainer) {
+                reportContainer.innerHTML = `
+                    <div style="text-align:center; padding:40px; border:1px dashed var(--gold); border-radius:12px; background:rgba(212,175,55,0.05)">
+                        <div class="spinning" style="font-size:32px; margin-bottom:15px">&#8635;</div>
+                        <h3 style="color:var(--gold)">Settlement Process Started</h3>
+                        <p>Currently scraping HKJC results and calculating ROI...</p>
+                        <p id="settle-timer" style="font-family:monospace; font-size:18px; margin-top:10px">Elapsed: 0s</p>
+                        <p style="font-size:12px; color:#888; margin-top:20px">The report will appear here automatically when finished (max 3 mins).</p>
+                    </div>
+                `;
+            }
+
+            let seconds = 0;
+            const timerInt = setInterval(() => {
+                seconds++;
+                const el = document.getElementById('settle-timer');
+                if (el) el.textContent = `Elapsed: ${seconds}s`;
+            }, 1000);
+
+            let attempts = 0;
+            const checkInt = setInterval(async () => {
+                attempts++;
+                const rResp = await fetch(`${API}/reports/${meetingDate}/${meetingVenue}`);
+                const rData = await rResp.json();
+                
+                if (rData.success || attempts > 36) { // Max 3 mins
+                    clearInterval(checkInt);
+                    clearInterval(timerInt);
+                    btn.disabled = false;
+                    btn.innerHTML = '🚀 SETTLE MEETING NOW';
+                    btn.style.background = '';
+                    if (currentRaceNo === 'report') renderMeetingReport();
+                }
+            }, 5000);
+        } else {
+            alert("Settlement failed to start: " + (data.error || "Unknown error"));
+            btn.disabled = false;
+            btn.innerHTML = '🚀 SETTLE AGAIN';
+            btn.style.background = 'var(--red)';
+        }
+    } catch (e) {
+        console.error('Settlement failed:', e);
+        btn.disabled = false;
+        btn.innerHTML = 'NET ERROR';
     }
 }
 
@@ -427,8 +512,8 @@ function renderMain(pick, pred, alerts) {
       </div>
       ${kellyRowsHtml}
       <div style="display:flex;gap:8px;margin-top:14px">
-        <button class="btn btn-stage" id="stage-btn" onclick="stageBet()">&#9889; STAGE BET</button>
-        <button class="btn btn-copy" onclick="copyBet()">&#128203; COPY</button>
+        <button class="btn btn-stage" id="stage-btn" onclick="stageBet(event)">&#9889; STAGE BET</button>
+        <button class="btn btn-copy" onclick="copyBet(event)">&#128203; COPY</button>
       </div>
     </div>
 
@@ -540,13 +625,13 @@ function renderCloudSync(active) {
 }
 
 // ─── STAGE BET ────────────────────────────────────────────────────────────────
-async function stageBet() {
+async function stageBet(event) {
     const pick = allPicks.find(p => p.race_no === currentRaceNo);
     if (!pick) return;
-    await _doStage(document.getElementById('stage-btn'), pick.horse_no, pick.kelly_stake || 10);
+    await _doStage(event.currentTarget, pick.horse_no, pick.kelly_stake || 10);
 }
 
-async function stageBetHorse(horseNo, stake) {
+async function stageBetHorse(event, horseNo, stake) {
     await _doStage(event.currentTarget, horseNo, stake);
 }
 
@@ -585,7 +670,7 @@ async function _doStage(btn, horseNo, stake) {
 }
 
 // ─── COPY BET ────────────────────────────────────────────────────────────────
-function copyBet() {
+function copyBet(event) {
     const pick = allPicks.find(p => p.race_no === currentRaceNo);
     if (!pick) return;
     const line = `${meetingVenue} R${pick.race_no} #${pick.horse_no} ${pick.horse_name || ''} WIN $${pick.kelly_stake || '--'}`;
@@ -644,6 +729,7 @@ async function checkHealth() {
 }
 
 // ─── BOOTSTRAP ───────────────────────────────────────────────────────────────
+initMeetingSelector();
 poll();
 setInterval(poll, POLL_MS);
 setInterval(checkHealth, 30000);
