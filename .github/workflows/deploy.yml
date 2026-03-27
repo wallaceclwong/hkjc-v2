@@ -26,11 +26,25 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Build and Push Container
+      - name: Build Container
+        id: build
         run: |-
-          gcloud auth configure-docker --quiet
-          docker build -t gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} .
-          docker push gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+          BUILD_ID=$(gcloud builds submit --tag gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} --async --format="value(id)" .)
+          echo "build_id=$BUILD_ID" >> $GITHUB_OUTPUT
+
+      - name: Wait for Build
+        run: |-
+          while true; do
+            STATUS=$(gcloud builds describe ${{ steps.build.outputs.build_id }} --format="value(status)")
+            echo "Current Build Status: $STATUS"
+            if [ "$STATUS" == "SUCCESS" ]; then
+              break
+            elif [ "$STATUS" == "FAILURE" ] || [ "$STATUS" == "INTERNAL_ERROR" ] || [ "$STATUS" == "TIMEOUT" ] || [ "$STATUS" == "CANCELLED" ]; then
+              echo "Build failed with status: $STATUS"
+              exit 1
+            fi
+            sleep 20
+          done
 
       - name: Deploy to Cloud Run
         uses: google-github-actions/deploy-cloudrun@v2
