@@ -666,10 +666,14 @@ function populateHorseMeta(pick, pred) {
 // ─── WEATHER ─────────────────────────────────────────────────────────────────
 function renderWeather(w) {
     if (!w) return;
-    document.getElementById('build-version').textContent = 'v2026.03.27.2345 (Automation Re-Enabled)';
-    document.getElementById('tw-track').textContent = w.track_condition_forecast || 'Good';
-    document.getElementById('tw-rain').textContent  = w.prob_rain != null ? Math.round(w.prob_rain*100)+'%' : '--%';
-    document.getElementById('tw-heat').textContent  = w.prob_temp_above_30 != null ? Math.round(w.prob_temp_above_30*100)+'%' : '--%';
+    const update = (id, text) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = text;
+    };
+    update('build-version', 'v2026.03.28.0259 (Automation Re-Enabled)');
+    update('tw-track', w.track_condition_forecast || 'Good');
+    update('tw-rain', w.prob_rain != null ? Math.round(w.prob_rain*100)+'%' : '--%');
+    update('tw-heat', w.prob_temp_above_30 != null ? Math.round(w.prob_temp_above_30*100)+'%' : '--%');
 }
 
 // ─── ALERTS (store globally for race detail rerender) ─────────────────────────
