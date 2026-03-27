@@ -666,7 +666,7 @@ function populateHorseMeta(pick, pred) {
 // ─── WEATHER ─────────────────────────────────────────────────────────────────
 function renderWeather(w) {
     if (!w) return;
-    document.getElementById('build-version').textContent = 'v2026.03.27.2200 (Automation Restored)';
+    document.getElementById('build-version').textContent = 'v2026.03.27.2300 (Cloud Sync Active)';
     document.getElementById('tw-track').textContent = w.track_condition_forecast || 'Good';
     document.getElementById('tw-rain').textContent  = w.prob_rain != null ? Math.round(w.prob_rain*100)+'%' : '--%';
     document.getElementById('tw-heat').textContent  = w.prob_temp_above_30 != null ? Math.round(w.prob_temp_above_30*100)+'%' : '--%';
