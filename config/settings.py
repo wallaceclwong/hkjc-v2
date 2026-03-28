@@ -14,7 +14,9 @@ class Config:
     GOOGLE_APPLICATION_CREDENTIALS = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
     
     # AI Config
-    GEMINI_MODEL = "gemini-2.5-pro"
+    TUNED_MODEL_ENDPOINT = os.getenv("TUNED_MODEL_ENDPOINT", "projects/386233903900/locations/us-central1/endpoints/4458018823085228032")
+    GEMINI_MODEL = os.getenv("GEMINI_MODEL", TUNED_MODEL_ENDPOINT)  # Fine-tuned hkjc_flash_full_8yr_v1
+    GEMINI_MODEL_FALLBACK = "gemini-2.5-flash"  # For weather intel and non-prediction tasks
     USE_VERTEX_AI = os.getenv("USE_VERTEX_AI", "True").lower() == "true"
     GCP_LOCATION = "us-central1"       # Models are confirmed available here
     GCS_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME", "hkjc-vault-6172aadc")

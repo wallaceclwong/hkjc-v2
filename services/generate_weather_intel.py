@@ -35,7 +35,7 @@ class WeatherAnalyzer:
             print("[INFO] Initializing Standard Gemini Client...")
             self.client = genai.Client(api_key=Config.GEMINI_API_KEY)
             
-        self.model_id = Config.GEMINI_MODEL
+        self.model_id = Config.GEMINI_MODEL_FALLBACK  # Weather uses standard Flash, not tuned model
         
         # 2. Firestore Sync
         self.firestore = FirestoreService()

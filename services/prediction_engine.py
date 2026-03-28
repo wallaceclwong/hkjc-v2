@@ -66,19 +66,17 @@ from services.storage_service import StorageService
 
 class PredictionEngine:
     def __init__(self):
-        if Config.USE_VERTEX_AI:
-            print(f"[INFO] Initializing Vertex AI Client in {Config.GCP_LOCATION}...")
-            self.client = genai.Client(
-                vertexai=True,
-                project=Config.MODEL_PROJECT_ID,
-                location=Config.GCP_LOCATION
-            )
-        else:
-            print("[INFO] Initializing Standard Gemini Client...")
-            self.client = genai.Client(api_key=Config.GEMINI_API_KEY)
+        # Tuned model requires Vertex AI; always use Vertex for predictions
+        print(f"[INFO] Initializing Vertex AI Client in {Config.GCP_LOCATION}...")
+        self.client = genai.Client(
+            vertexai=True,
+            project=Config.MODEL_PROJECT_ID,
+            location=Config.GCP_LOCATION
+        )
             
         self.cache_id = None # Can be set after initialization if using Vertex AI
         self.model_id = Config.GEMINI_MODEL
+        print(f"[INFO] Prediction model: {self.model_id}")
         self.base_dir = Path(__file__).resolve().parent.parent
         self.data_dir = self.base_dir / "data"
         self.predictions_dir = self.data_dir / "predictions"
