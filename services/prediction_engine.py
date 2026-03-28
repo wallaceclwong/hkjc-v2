@@ -305,6 +305,12 @@ class PredictionEngine:
             win_odds = data.get("odds", {}).get("win_odds", {})
             probs = prediction_dict.get("probabilities", {})
             
+            # CRITICAL FIX: Normalize probabilities to strictly sum to 1.0 (prevents Hallucinated EV)
+            total_prob = sum(probs.values()) if probs else 0.0
+            if total_prob > 0:
+                probs = {h: p / total_prob for h, p in probs.items()}
+                prediction_dict["probabilities"] = probs
+            
             # Apply RL Bias Correction to probabilities before Kelly calculation
             # If the AI is overconfident, we scale down the probabilities to be more conservative
             conf_bias = self.bias_correction.get("confidence_bias", 0.0)
@@ -380,6 +386,13 @@ class PredictionEngine:
         # Calculate Kelly for shadow too
         win_odds = data.get("odds", {}).get("win_odds", {})
         shadow_probs = shadow_dict.get("probabilities", {})
+        
+        # CRITICAL FIX: Normalize shadow probabilities
+        total_prob = sum(shadow_probs.values()) if shadow_probs else 0.0
+        if total_prob > 0:
+            shadow_probs = {h: p / total_prob for h, p in shadow_probs.items()}
+            shadow_dict["probabilities"] = shadow_probs
+
         shadow_dict["kelly_stakes"] = self.kelly.calculate_race_stakes(shadow_probs, win_odds)
         shadow_dict["market_odds"] = win_odds
 
