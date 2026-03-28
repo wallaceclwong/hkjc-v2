@@ -61,6 +61,13 @@ class MeetingSettlement:
         logger.info("Generating Markdown report...")
         report_md = self.evaluator.format_markdown_report(date_str, venue, results_list)
         
+        # 3b. A/B Shadow Evaluation
+        shadow_results = self.evaluator.evaluate_shadow(date_str, venue)
+        if shadow_results:
+            logger.info(f"A/B shadow: {len(shadow_results)} shadow predictions evaluated")
+            ab_section = self.evaluator.format_ab_comparison(date_str, venue, results_list, shadow_results)
+            report_md += ab_section
+
         # Save locally
         report_file = self.reports_dir / f"report_{date_str}_{venue}.md"
         with open(report_file, "w", encoding="utf-8") as f:

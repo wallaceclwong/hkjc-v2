@@ -148,6 +148,106 @@ class BettingEvaluator:
         report += f"\n\n*Report generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*"
         return report
 
+    def evaluate_shadow(self, date_str: str, venue: str) -> List[Dict]:
+        """Evaluates shadow (A/B) predictions for the same race day."""
+        results_list = []
+        pattern = f"prediction_{date_str}_{venue}_R*_shadow.json"
+        shadow_files = sorted(list(self.predictions_dir.glob(pattern)))
+
+        if not shadow_files:
+            return []
+
+        for pred_file in shadow_files:
+            try:
+                with open(pred_file, "r", encoding="utf-8") as f:
+                    pred_data = json.load(f)
+
+                race_id = pred_data["race_id"]
+                race_no = race_id.split("_R")[-1]
+                rec_bet = pred_data.get("recommended_bet", "")
+
+                if not rec_bet or rec_bet == "NO BET":
+                    continue
+
+                result_file = self.results_dir / f"results_{race_id}.json"
+                if not result_file.exists():
+                    continue
+
+                with open(result_file, "r", encoding="utf-8") as f:
+                    result_data = json.load(f)
+
+                import re
+                numbers = re.findall(r'\d+', rec_bet)
+                selection = numbers[0] if numbers else ""
+
+                profit_dividend = self.calculate_profit(rec_bet, result_data)
+                status = "WIN" if profit_dividend > 0 else "LOSS"
+                ai_p_l = profit_dividend - 10.0 if profit_dividend > 0 else -10.0
+                ai_roi = (ai_p_l / 10.0) * 100
+
+                official_win = next((h["horse_no"] for h in result_data.get("results", []) if h.get("plc") == "1"), "")
+
+                results_list.append({
+                    "race_no": race_no,
+                    "race_id": race_id,
+                    "official_result": f"WIN {official_win}" if official_win else "--",
+                    "ai_top_pick": rec_bet,
+                    "ai_roi": round(ai_roi, 1),
+                    "model": pred_data.get("gemini_model", "shadow"),
+                })
+            except Exception as e:
+                print(f"Error evaluating shadow {pred_file.name}: {e}")
+
+        return results_list
+
+    def format_ab_comparison(self, date_str: str, venue: str, primary: List[Dict], shadow: List[Dict]) -> str:
+        """Generates A/B comparison section for the report."""
+        if not shadow:
+            return ""
+
+        # Build lookup by race_no
+        shadow_by_race = {r["race_no"]: r for r in shadow}
+        primary_by_race = {r["race_no"]: r for r in primary}
+        all_races = sorted(set(list(shadow_by_race.keys()) + list(primary_by_race.keys())), key=int)
+
+        p_wins = sum(1 for r in primary if "WIN" not in r.get("result_status", "") or "WIN" in r.get("result_status", ""))
+        # Recalculate properly
+        p_wins = sum(1 for r in primary if "✅" in r.get("result_status", ""))
+        s_wins = sum(1 for r in shadow if r["ai_roi"] > 0)
+
+        p_model = Config.GEMINI_MODEL.split("/")[-1] if "/" in Config.GEMINI_MODEL else Config.GEMINI_MODEL
+        s_model = Config.SHADOW_MODEL
+
+        section = f"\n## 🔬 A/B Model Comparison\n"
+        section += f"| | **{p_model}** (Primary) | **{s_model}** (Shadow) |\n"
+        section += f"| :--- | :--- | :--- |\n"
+        section += f"| **Wins** | {p_wins}/{len(primary)} | {s_wins}/{len(shadow)} |\n"
+
+        p_roi = sum(r['ai_roi'] for r in primary) / len(primary) if primary else 0
+        s_roi = sum(r['ai_roi'] for r in shadow) / len(shadow) if shadow else 0
+        section += f"| **Avg AI ROI** | {p_roi:.1f}% | {s_roi:.1f}% |\n\n"
+
+        section += "| Race | Official | Primary Pick | Shadow Pick | Primary | Shadow |\n"
+        section += "| :--- | :--- | :--- | :--- | :--- | :--- |\n"
+
+        for rn in all_races:
+            p = primary_by_race.get(rn, {})
+            s = shadow_by_race.get(rn, {})
+            official = p.get("official_result", s.get("official_result", "--"))
+            p_pick = p.get("ai_top_pick", "--")
+            s_pick = s.get("ai_top_pick", "--")
+            p_r = f"{p.get('ai_roi', 0):.0f}%" if p else "--"
+            s_r = f"{s.get('ai_roi', 0):.0f}%" if s else "--"
+
+            # Highlight if picks differ
+            if p_pick != s_pick and p_pick != "--" and s_pick != "--":
+                p_pick = f"**{p_pick}**"
+                s_pick = f"**{s_pick}**"
+
+            section += f"| R{rn} | {official} | {p_pick} | {s_pick} | {p_r} | {s_r} |\n"
+
+        return section
+
     def calculate_profit(self, rec_bet: str, result_data: Dict[str, Any]) -> float:
         """
         Calculates the gross payout for a specific bet.

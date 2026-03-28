@@ -28,6 +28,7 @@ class MarketWatchdog:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.last_heartbeat = None
         self.firestore = FirestoreService()
+        self._poll_lock = asyncio.Lock()  # Serialize browser access across races
 
     async def poll_and_detect(self, race_no: int, venue: str = "ST"):
         """
@@ -37,8 +38,9 @@ class MarketWatchdog:
         race_id = f"{date_str}_{venue}_R{race_no}"
         
         try:
-            logger.info(f"Watchdog polling {race_id}...")
-            odds_data = await self.odds_service.fetch_odds(date_str=date_str, race_no=race_no, venue=venue)
+            async with self._poll_lock:
+                logger.info(f"Watchdog polling {race_id}...")
+                odds_data = await self.odds_service.fetch_odds(date_str=date_str, race_no=race_no, venue=venue)
             
             if not odds_data:
                 logger.warning(f"Watchdog failed to fetch odds for {race_id}")
@@ -47,6 +49,11 @@ class MarketWatchdog:
             self.last_heartbeat = datetime.now().isoformat()
         except Exception as e:
             logger.error(f"Error in poll_and_detect for {race_id}: {e}")
+            # Ensure browser is cleaned up after crash
+            try:
+                await self.odds_service.browser_mgr.stop()
+            except Exception:
+                pass
             return []
 
         current_win_odds = odds_data.get("win_odds", {})
@@ -127,8 +134,11 @@ class MarketWatchdog:
     async def run_loop(self, race_no: int, venue: str = "ST", interval=120):
         """
         Continuous background loop for a specific race.
+        Staggered by race_no to avoid all races queuing simultaneously.
         """
-        logger.info(f"Starting Watchdog loop for Race {race_no} every {interval}s")
+        stagger = race_no * 10  # R1=10s, R2=20s, ... R11=110s
+        logger.info(f"Starting Watchdog loop for Race {race_no} every {interval}s (stagger {stagger}s)")
+        await asyncio.sleep(stagger)
         while True:
             try:
                 await self.poll_and_detect(race_no, venue)

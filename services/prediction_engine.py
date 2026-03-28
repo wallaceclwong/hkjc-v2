@@ -345,11 +345,65 @@ class PredictionEngine:
                     ev=max_stake # Using stake as a proxy since EV isn't in this schema
                 )
 
+            # A/B Shadow: run same prompt through shadow model (non-blocking, failures don't affect primary)
+            if Config.SHADOW_MODEL and Config.SHADOW_MODEL != self.model_id:
+                try:
+                    self._run_shadow_prediction(
+                        prompt, response_schema, data,
+                        date_str, venue, race_no
+                    )
+                except Exception as e:
+                    print(f"[SHADOW] Shadow prediction failed (non-critical): {e}")
+
             return prediction
             
         except Exception as e:
             print(f"Error generating prediction: {e}")
             return None
+
+    def _run_shadow_prediction(self, prompt, response_schema, data, date_str, venue, race_no):
+        """Run the same prompt through the shadow model for A/B comparison."""
+        shadow_id = Config.SHADOW_MODEL
+        print(f"[SHADOW] Running A/B shadow prediction with {shadow_id}...")
+
+        shadow_resp = self.client.models.generate_content(
+            model=shadow_id,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=response_schema,
+            )
+        )
+
+        shadow_dict = json.loads(shadow_resp.text)
+
+        # Calculate Kelly for shadow too
+        win_odds = data.get("odds", {}).get("win_odds", {})
+        shadow_probs = shadow_dict.get("probabilities", {})
+        shadow_dict["kelly_stakes"] = self.kelly.calculate_race_stakes(shadow_probs, win_odds)
+        shadow_dict["market_odds"] = win_odds
+
+        shadow_pred = Prediction(
+            race_id=f"{date_str}_{venue}_R{race_no}",
+            gemini_model=shadow_id,
+            **shadow_dict
+        )
+
+        # Save shadow prediction with _shadow suffix
+        shadow_file = self.predictions_dir / f"prediction_{date_str}_{venue}_R{race_no}_shadow.json"
+        with open(shadow_file, "w", encoding="utf-8") as f:
+            f.write(shadow_pred.model_dump_json(indent=2))
+        print(f"[SHADOW] Shadow prediction saved to {shadow_file}")
+
+        # Sync shadow to Firestore under separate collection
+        try:
+            self.firestore.upsert(
+                "predictions_shadow",
+                f"{date_str}_{venue}_R{race_no}",
+                shadow_pred
+            )
+        except Exception as e:
+            print(f"[SHADOW] Firestore sync failed: {e}")
 
     def _construct_prompt(self, data: Dict[str, Any]) -> str:
         racecard = data.get("racecard", {})
