@@ -171,16 +171,45 @@ class MarketWatchdog:
             # Update market_odds
             pred["market_odds"] = win_odds
 
-            # Recalculate Kelly stakes
+            # Recalculate Kelly stakes with safeguards
             probabilities = pred.get("probabilities", {})
             kelly_stakes = {}
+            
+            # Calculate edges for all horses first
+            edges = {}
             for horse_no, prob in probabilities.items():
                 odds = win_odds.get(str(horse_no))
                 if odds and odds > 1 and prob > 0:
                     edge = (prob * odds - 1) / (odds - 1)
-                    if edge > 0:
-                        stake = round(Config.INITIAL_BANKROLL * Config.KELLY_FRACTION * edge, 2)
-                        kelly_stakes[str(horse_no)] = stake
+                    edges[str(horse_no)] = edge
+            
+            # Sort by edge (highest first) and apply safeguards
+            sorted_horses = sorted(edges.items(), key=lambda x: x[1], reverse=True)
+            total_exposure = 0
+            max_exposure = Config.INITIAL_BANKROLL * 0.05  # 5% of bankroll max per race
+            
+            for horse_no, edge in sorted_horses:
+                # Skip if edge is too small
+                if edge < 0.05:  # Minimum 5% edge
+                    continue
+                
+                # Skip if we already have 2 horses
+                if len(kelly_stakes) >= 2:
+                    continue
+                
+                # Calculate stake
+                stake = round(Config.INITIAL_BANKROLL * Config.KELLY_FRACTION * edge, 2)
+                
+                # Check exposure cap
+                if total_exposure + stake > max_exposure:
+                    remaining = max_exposure - total_exposure
+                    if remaining > 0:
+                        stake = round(remaining, 2)
+                    else:
+                        break
+                
+                kelly_stakes[horse_no] = stake
+                total_exposure += stake
 
             pred["kelly_stakes"] = kelly_stakes
             pred["odds_updated_at"] = datetime.now().isoformat()
