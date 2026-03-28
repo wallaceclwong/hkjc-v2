@@ -1,4 +1,5 @@
 import asyncio
+import os
 from playwright.async_api import async_playwright, BrowserContext, Page, Browser, Playwright
 from typing import Optional, Tuple
 from pathlib import Path
@@ -25,11 +26,23 @@ class BrowserManager:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.stop()
 
+    def _get_proxy_config(self):
+        """Returns proxy config from PROXY_URL env var if set."""
+        proxy_url = os.getenv("PROXY_URL")
+        if proxy_url:
+            # Format: http://user:pass@host:port
+            return {"server": proxy_url}
+        return None
+
     async def start(self):
         if not self.playwright:
             self.playwright = await async_playwright().start()
         if not self.browser:
-            self.browser = await self.playwright.chromium.launch(headless=self.headless)
+            proxy = self._get_proxy_config()
+            launch_opts = {"headless": self.headless}
+            if proxy:
+                launch_opts["proxy"] = proxy
+            self.browser = await self.playwright.chromium.launch(**launch_opts)
         return self
 
     async def stop(self):
@@ -55,6 +68,10 @@ class BrowserManager:
         await page.set_extra_http_headers({
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         })
+        # Block heavy resources when using proxy to save bandwidth
+        if os.getenv("PROXY_URL"):
+            await page.route("**/*.{png,jpg,jpeg,gif,svg,ico,woff,woff2,ttf,eot}", lambda route: route.abort())
+            await page.route("**/*.css", lambda route: route.abort())
         return page
 
     async def get_persistent_context(self, session_id: str = "default") -> Tuple[BrowserContext, Page]:
