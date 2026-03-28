@@ -13,6 +13,7 @@ from config.settings import Config
 from services.results_ingest import ResultsIngest
 from services.betting_evaluator import BettingEvaluator
 from services.firestore_service import FirestoreService
+from services.rl_optimizer import RLOptimizer
 
 class MeetingSettlement:
     def __init__(self, headless=True):
@@ -93,10 +94,20 @@ class MeetingSettlement:
             report_id = f"{date_str}_{venue}"
             self.firestore.upsert("meeting_reports", report_id, report_data)
             logger.info(f"✅ Settlement synced to Firestore: {report_id}")
-            return True
         except Exception as e:
             logger.error(f"Failed to sync settlement to Firestore: {e}")
             return False
+
+        # 5. Auto-recalibrate RL biases using latest results
+        try:
+            logger.info("🧠 Running RL bias recalibration...")
+            optimizer = RLOptimizer()
+            optimizer.optimize_from_past_days(days=30)
+            logger.info("✅ RL biases recalibrated with latest 30 days of data")
+        except Exception as e:
+            logger.error(f"⚠️ RL recalibration failed (non-critical): {e}")
+
+        return True
 
 async def main():
     import argparse
