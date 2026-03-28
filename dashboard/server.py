@@ -813,10 +813,14 @@ async def recovery_task(race_no: int, venue: str):
 async def startup_event():
     # Detect tonight's venue dynamically for the watchdog
     meeting_date, venue = get_current_meeting_info()
-    logger.info(f"📍 Initializing Watchdog for meeting: {meeting_date} ({venue})")
 
-    # Start the watchdog in a recovery wrapper
-    asyncio.create_task(recovery_task(race_no=1, venue=venue))
+    # Only start watchdog if ENABLE_WATCHDOG is set (default: enabled)
+    # Set ENABLE_WATCHDOG=false on VM to avoid scraping HKJC from datacenter IP
+    if os.getenv("ENABLE_WATCHDOG", "true").lower() != "false":
+        logger.info(f"📍 Initializing Watchdog for meeting: {meeting_date} ({venue})")
+        asyncio.create_task(recovery_task(race_no=1, venue=venue))
+    else:
+        logger.info(f"📍 Watchdog DISABLED (ENABLE_WATCHDOG=false). Dashboard reads from Firestore only.")
 
 @app.post("/subscribe")
 async def subscribe_to_alerts(request: SubscribeRequest):
