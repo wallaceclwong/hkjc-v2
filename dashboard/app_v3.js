@@ -2,7 +2,7 @@
 const API = (() => {
     const host = window.location.hostname;
     if (host === 'localhost' || host === '127.0.0.1') return 'http://localhost:8000';
-    return 'https://hkjc-predictor-mj2mcbfjxq-uc.a.run.app';
+    return ''; // Production uses Firebase Hosting rewrites natively
 })();
 
 const POLL_MS = 5000;
