@@ -817,8 +817,11 @@ async def startup_event():
     # Only start watchdog if ENABLE_WATCHDOG is set (default: enabled)
     # Set ENABLE_WATCHDOG=false on VM to avoid scraping HKJC from datacenter IP
     if os.getenv("ENABLE_WATCHDOG", "true").lower() != "false":
-        logger.info(f"📍 Initializing Watchdog for meeting: {meeting_date} ({venue})")
-        asyncio.create_task(recovery_task(race_no=1, venue=venue))
+        max_races = 11 if venue == "ST" else 9
+        logger.info(f"📍 Initializing Watchdog for meeting: {meeting_date} ({venue}) — {max_races} races")
+        for r in range(1, max_races + 1):
+            asyncio.create_task(recovery_task(race_no=r, venue=venue))
+            await asyncio.sleep(2)  # Stagger startup to avoid burst scraping
     else:
         logger.info(f"📍 Watchdog DISABLED (ENABLE_WATCHDOG=false). Dashboard reads from Firestore only.")
 

@@ -46,7 +46,7 @@ class WeatherAnalyzer:
 
     def _setup_weathernext_auth(self):
         """Acquires OAuth token for WeatherNext 2 using the service account key."""
-        key_path = "c:/Users/ASUS/hkjc/service-account-key.json"
+        key_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "service-account-key.json")
         if os.path.exists(key_path):
             try:
                 scopes = ["https://www.googleapis.com/auth/cloud-platform"]
