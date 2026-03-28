@@ -809,6 +809,46 @@ async def recovery_task(race_no: int, venue: str):
             logger.error(f"⚠️ Watchdog CRASHED: {e}. Restarting in 5s...")
             await asyncio.sleep(5)
 
+async def auto_settlement_task(meeting_date: str, venue: str):
+    """
+    Waits until after the last race, then auto-settles the meeting.
+    ST day races end ~6:30pm HKT, HV night races end ~10:30pm HKT.
+    Checks every 15 minutes until all results are scraped and report is generated.
+    """
+    # Determine when to start checking
+    settle_hour = 19 if venue == "ST" else 23  # 7pm for ST, 11pm for HV
+    now_hk = datetime.now(HK_TZ)
+    start_time = now_hk.replace(hour=settle_hour, minute=0, second=0, microsecond=0)
+    
+    if now_hk < start_time:
+        wait_secs = (start_time - now_hk).total_seconds()
+        logger.info(f"🏁 Auto-settlement scheduled for {start_time.strftime('%H:%M')} HKT ({wait_secs/60:.0f} min from now)")
+        await asyncio.sleep(wait_secs)
+    
+    # Check if already settled
+    report_file = Path("data/reports") / f"report_{meeting_date}_{venue}.md"
+    if report_file.exists():
+        logger.info(f"🏁 Settlement already done for {meeting_date} ({venue}). Skipping.")
+        return
+    
+    # Try up to 8 times (2 hours of retries)
+    settlement = MeetingSettlement()
+    for attempt in range(1, 9):
+        logger.info(f"🏁 Auto-settlement attempt {attempt}/8 for {meeting_date} ({venue})...")
+        try:
+            success = await settlement.settle_meeting(meeting_date, venue)
+            if success:
+                logger.info(f"✅ Auto-settlement COMPLETE for {meeting_date} ({venue})")
+                return
+            else:
+                logger.warning(f"⚠️ Settlement returned no results — retrying in 15 min")
+        except Exception as e:
+            logger.error(f"⚠️ Settlement attempt {attempt} failed: {e}")
+        
+        await asyncio.sleep(900)  # Wait 15 minutes before retry
+    
+    logger.error(f"❌ Auto-settlement FAILED after 8 attempts for {meeting_date} ({venue})")
+
 @app.on_event("startup")
 async def startup_event():
     # Detect tonight's venue dynamically for the watchdog
@@ -822,6 +862,9 @@ async def startup_event():
         for r in range(1, max_races + 1):
             asyncio.create_task(recovery_task(race_no=r, venue=venue))
             await asyncio.sleep(2)  # Stagger startup to avoid burst scraping
+        
+        # Auto-settlement: runs after last race (scrapes HKJC results from residential IP)
+        asyncio.create_task(auto_settlement_task(meeting_date, venue))
     else:
         logger.info(f"📍 Watchdog DISABLED (ENABLE_WATCHDOG=false). Dashboard reads from Firestore only.")
 
