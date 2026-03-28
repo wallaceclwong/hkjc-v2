@@ -1,4 +1,4 @@
-{
+﻿{
   "hosting": {
     "public": "dashboard",
     "ignore": [
@@ -6,41 +6,52 @@
       "**/.*",
       "**/node_modules/**"
     ],
+    "headers": [
+      {
+        "source": "/{ping,latest,picks,meetings,reports,prediction,execution,health,debug,subscribe}{,/**}",
+        "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]
+      }
+    ],
     "rewrites": [
       {
+        "source": "/ping",
+        "run": { "serviceId": "hkjc-predictor", "region": "us-central1" }
+      },
+      {
         "source": "/latest{,/**}",
-        "run": {
-          "serviceId": "hkjc-predictor",
-          "region": "us-central1"
-        }
+        "run": { "serviceId": "hkjc-predictor", "region": "us-central1" }
       },
       {
         "source": "/picks{,/**}",
-        "run": {
-          "serviceId": "hkjc-predictor",
-          "region": "us-central1"
-        }
+        "run": { "serviceId": "hkjc-predictor", "region": "us-central1" }
       },
       {
         "source": "/meetings{,/**}",
-        "run": {
-          "serviceId": "hkjc-predictor",
-          "region": "us-central1"
-        }
+        "run": { "serviceId": "hkjc-predictor", "region": "us-central1" }
+      },
+      {
+        "source": "/reports{,/**}",
+        "run": { "serviceId": "hkjc-predictor", "region": "us-central1" }
+      },
+      {
+        "source": "/prediction{,/**}",
+        "run": { "serviceId": "hkjc-predictor", "region": "us-central1" }
       },
       {
         "source": "/execution{,/**}",
-        "run": {
-          "serviceId": "hkjc-predictor",
-          "region": "us-central1"
-        }
+        "run": { "serviceId": "hkjc-predictor", "region": "us-central1" }
       },
       {
         "source": "/health{,/**}",
-        "run": {
-          "serviceId": "hkjc-predictor",
-          "region": "us-central1"
-        }
+        "run": { "serviceId": "hkjc-predictor", "region": "us-central1" }
+      },
+      {
+        "source": "/debug{,/**}",
+        "run": { "serviceId": "hkjc-predictor", "region": "us-central1" }
+      },
+      {
+        "source": "/subscribe",
+        "run": { "serviceId": "hkjc-predictor", "region": "us-central1" }
       },
       {
         "source": "**",

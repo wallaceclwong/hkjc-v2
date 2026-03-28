@@ -2,10 +2,7 @@
 const API = (() => {
     const host = window.location.hostname;
     if (host === 'localhost' || host === '127.0.0.1') return 'http://localhost:8000';
-    if (host === 'hkjc-predictor-v3.web.app' || host === 'hkjc-predictor-v3.firebaseapp.com') {
-        return 'https://hkjc-predictor-mj2mcbfjxq-uc.a.run.app';
-    }
-    return window.location.origin;
+    return 'https://hkjc-predictor-mj2mcbfjxq-uc.a.run.app';
 })();
 
 const POLL_MS = 5000;

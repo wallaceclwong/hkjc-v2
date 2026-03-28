@@ -52,6 +52,10 @@ class MarketWatchdog:
         current_win_odds = odds_data.get("win_odds", {})
         alerts = []
 
+        # Always update prediction files with latest odds
+        if current_win_odds:
+            self._update_prediction_odds(date_str, venue, race_no, current_win_odds)
+
         # If we don't have a baseline for this race yet, set it now
         if race_id not in self.baselines:
             self.baselines[race_id] = current_win_odds
@@ -131,6 +135,59 @@ class MarketWatchdog:
             except Exception as e:
                 logger.error(f"CRITICAL: Watchdog loop error for Race {race_no}: {e}")
             await asyncio.sleep(interval)
+
+    def _update_prediction_odds(self, date_str: str, venue: str, race_no: int, win_odds: Dict):
+        """Writes live odds into prediction files and recalculates Kelly stakes."""
+        pred_dir = Config.BASE_DIR / "data" / "predictions"
+        race_id = f"{date_str}_{venue}_R{race_no}"
+        pred_file = pred_dir / f"prediction_{race_id}.json"
+
+        # If no prediction for today, find the nearest future meeting date
+        if not pred_file.exists():
+            import glob
+            pattern = str(pred_dir / f"prediction_*_{venue}_R{race_no}.json")
+            candidates = sorted(glob.glob(pattern))
+            future = [c for c in candidates if Path(c).stem.split("_")[1] >= date_str]
+            if future:
+                pred_file = Path(future[0])
+                race_id = pred_file.stem.replace("prediction_", "")
+            else:
+                return
+
+        try:
+            with open(pred_file, "r", encoding="utf-8") as f:
+                pred = json.load(f)
+
+            # Update market_odds
+            pred["market_odds"] = win_odds
+
+            # Recalculate Kelly stakes
+            probabilities = pred.get("probabilities", {})
+            kelly_stakes = {}
+            for horse_no, prob in probabilities.items():
+                odds = win_odds.get(str(horse_no))
+                if odds and odds > 1 and prob > 0:
+                    edge = (prob * odds - 1) / (odds - 1)
+                    if edge > 0:
+                        stake = round(Config.INITIAL_BANKROLL * Config.KELLY_FRACTION * edge, 2)
+                        kelly_stakes[str(horse_no)] = stake
+
+            pred["kelly_stakes"] = kelly_stakes
+            pred["odds_updated_at"] = datetime.now().isoformat()
+
+            # Save locally
+            with open(pred_file, "w", encoding="utf-8") as f:
+                json.dump(pred, f, indent=2)
+
+            # Sync to Firestore
+            try:
+                self.firestore.upsert(Config.COL_PREDICTIONS, race_id, pred)
+            except Exception as e:
+                logger.error(f"Failed to sync prediction to Firestore: {e}")
+
+            logger.info(f"📊 Updated odds for {race_id}: {len(win_odds)} horses, {len(kelly_stakes)} Kelly selections")
+        except Exception as e:
+            logger.error(f"Failed to update prediction odds for {race_id}: {e}")
 
 if __name__ == "__main__":
     # Test script
