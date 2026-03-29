@@ -68,9 +68,12 @@ class WeatherAnalyzer:
         with open(latest, "r", encoding="utf-8") as f:
             return json.load(f)
 
-    async def analyze(self, venue="HV"):
+    async def analyze(self, venue="HV", date_str=None):
         # 1. Get HKO Contextual Data
         hko_data = self.get_latest_hko_weather()
+        
+        # Determine target date (default to today if not provided)
+        target_date = date_str if date_str else datetime.now().strftime('%Y-%m-%d')
         
         # 2. Get WeatherNext 2 Probabilistic Data
         print(f"Fetching WeatherNext 2 probabilistic forecast for {venue}...")
@@ -96,7 +99,7 @@ class WeatherAnalyzer:
         
         Generate a 'Weather Intelligence' report in JSON format with these fields:
         - venue: {venue}
-        - date: {datetime.now().strftime('%Y-%m-%d')}
+        - date: {target_date}
         - max_temp_c: (float) Final predicted max temp (prioritize WeatherNext 2 if available)
         - prob_rain: (float 0.0-1.0) Final probability of rain (prioritize WeatherNext 2 if available)
         - prob_temp_above_30: (float 0.0-1.0) Final probability (prioritize WeatherNext 2 if available)
@@ -122,7 +125,7 @@ class WeatherAnalyzer:
         # 4. Save locally
         weather_dir = Config.BASE_DIR / "data/weather"
         weather_dir.mkdir(parents=True, exist_ok=True)
-        filename = weather_dir / f"intel_{venue}_{intel['date']}.json"
+        filename = weather_dir / f"intel_{venue}_{target_date}.json"
         with open(filename, "w", encoding="utf-8") as f:
             json.dump(intel, f, indent=2)
             
@@ -151,4 +154,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     analyzer = WeatherAnalyzer()
-    asyncio.run(analyzer.analyze(venue=args.venue))
+    asyncio.run(analyzer.analyze(venue=args.venue, date_str=args.date))

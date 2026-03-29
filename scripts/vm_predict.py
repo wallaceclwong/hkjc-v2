@@ -16,15 +16,15 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from services.prediction_engine import PredictionEngine
-from services.generate_weather_intel import WeatherIntelligenceEngine
+from services.generate_weather_intel import WeatherAnalyzer
 
 
 async def run_predictions(date_str: str, venue: str):
     # 1. Weather Intelligence (Google APIs only)
     print(f"\n--- Weather Intelligence for {venue} ---")
     try:
-        wie = WeatherIntelligenceEngine()
-        await wie.generate_intel(date_str=date_str, venue=venue)
+        wie = WeatherAnalyzer()
+        await wie.analyze(venue=venue, date_str=date_str)
         print("Weather intel generated.")
     except Exception as e:
         print(f"[WARN] Weather intel failed: {e}")
