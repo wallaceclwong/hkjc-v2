@@ -14,23 +14,91 @@ if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
 from config.settings import Config
-from services.firestore_service import FirestoreService
-from services.execution_engine import ExecutionEngine
-from services.rl_optimizer import RLOptimizer
-from services.market_watchdog import MarketWatchdog
-from services.notification_service import NotificationService
+# Lazy Loading Container
+class AppState:
+    def __init__(self):
+        self._execution_engine = None
+        self._notification_service = None
+        self._rl_optimizer = None
+        self._market_watchdog = None
+        self._firestore = None
+
+    @property
+    def execution_engine(self):
+        if self._execution_engine is None:
+            from services.execution_engine import ExecutionEngine
+            self._execution_engine = ExecutionEngine(dry_run=True, headless=False)
+        return self._execution_engine
+
+    @property
+    def notification_service(self):
+        if self._notification_service is None:
+            from services.notification_service import NotificationService
+            self._notification_service = NotificationService()
+        return self._notification_service
+
+    @property
+    def rl_optimizer(self):
+        if self._rl_optimizer is None:
+            from services.rl_optimizer import RLOptimizer
+            self._rl_optimizer = RLOptimizer()
+        return self._rl_optimizer
+
+    @property
+    def market_watchdog(self):
+        if self._market_watchdog is None:
+            from services.market_watchdog import MarketWatchdog
+            self._market_watchdog = MarketWatchdog()
+        return self._market_watchdog
+
+    @property
+    def firestore(self):
+        if self._firestore is None:
+            from services.firestore_service import FirestoreService
+            self._firestore = FirestoreService()
+        return self._firestore
+
+state = AppState()
+
+# For backward compatibility with existing imports in other files
+def get_execution_engine(): return state.execution_engine
+def get_market_watchdog(): return state.market_watchdog
+def get_firestore(): return state.firestore
+
+# Dynamic Proxy to handle true lazy loading without breaking existing 'from dependencies import x'
+class DependencyProxy:
+    def __init__(self, name):
+        self._name = name
+
+    def _get_target(self):
+        return getattr(state, self._name)
+
+    def __getattr__(self, name):
+        return getattr(self._get_target(), name)
+    
+    def __getitem__(self, key):
+        return self._get_target()[key]
+
+    def __call__(self, *args, **kwargs):
+        return self._get_target()(*args, **kwargs)
+
+    def __repr__(self):
+        return repr(self._get_target())
+
+    def __str__(self):
+        return str(self._get_target())
+
+# Overwrite the global variables with TRUE proxies
+execution_engine = DependencyProxy("execution_engine")
+notification_service = DependencyProxy("notification_service")
+rl_optimizer = DependencyProxy("rl_optimizer")
+market_watchdog = DependencyProxy("market_watchdog")
+firestore = DependencyProxy("firestore")
 
 # Environment / Paths
 DATA_DIR = BASE_DIR / "data"
 USE_FIRESTORE = os.getenv("USE_FIRESTORE", "false").lower() == "true" or os.getenv("K_SERVICE") is not None
 HK_TZ = pytz.timezone("Asia/Hong_Kong")
-
-# App Singletons
-execution_engine = ExecutionEngine(dry_run=True, headless=False)
-notification_service = NotificationService()
-rl_optimizer = RLOptimizer()
-market_watchdog = MarketWatchdog()
-firestore = FirestoreService()
 
 # Caches
 _cached_ip = None

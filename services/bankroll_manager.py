@@ -16,30 +16,45 @@ class BankrollManager:
         
         # Determine if we should use firestore to sync
         self.use_firestore = getattr(Config, "USE_FIRESTORE", True)
-        self.firestore = FirestoreService() if self.use_firestore else None
-        
-        self._ensure_initialized()
+        self._firestore = None  # Lazy load
+
+    @property
+    def firestore(self):
+        if self._firestore is None and self.use_firestore:
+            self._firestore = FirestoreService()
+        return self._firestore
 
     def _ensure_initialized(self):
         """Creates the initial bankroll state if it doesn't exist."""
-        if not self.filepath.exists():
-            # Try to pull from Firestore first
-            if self.use_firestore:
+        # Fast local check
+        if self.filepath.exists():
+            return
+
+        logger.info("Initializing fresh bankroll state...")
+        
+        # Try to pull from Firestore first
+        if self.use_firestore:
+            try:
                 fs_data = self.firestore.get_document(Config.COL_BANKROLL, "current_state")
                 if fs_data:
                     self._save_local(fs_data)
                     return
-            
-            # Seed with INITIAL_BANKROLL
-            initial_state = {
-                "current_bankroll": Config.INITIAL_BANKROLL,
-                "high_water_mark": Config.INITIAL_BANKROLL,
-                "last_updated": datetime.now().isoformat(),
-                "history": []
-            }
-            self._save_local(initial_state)
-            if self.use_firestore:
+            except Exception as e:
+                logger.warning(f"Failed to fetch initial bankroll from Firestore: {e}")
+        
+        # Seed with INITIAL_BANKROLL if not in Firestore
+        initial_state = {
+            "current_bankroll": Config.INITIAL_BANKROLL,
+            "high_water_mark": Config.INITIAL_BANKROLL,
+            "last_updated": datetime.now().isoformat(),
+            "history": []
+        }
+        self._save_local(initial_state)
+        if self.use_firestore:
+            try:
                 self.firestore.upsert(Config.COL_BANKROLL, "current_state", initial_state)
+            except Exception as e:
+                logger.error(f"Failed to upload initial bankroll to Firestore: {e}")
 
     def _load_local(self) -> Dict[str, Any]:
         with open(self.filepath, "r", encoding="utf-8") as f:
@@ -51,13 +66,17 @@ class BankrollManager:
 
     def get_current_bankroll(self) -> float:
         """Returns the current bankroll ready for the NEXT prediction."""
+        self._ensure_initialized()
         try:
-            # Sync with Firestore for multi-device parity
+            # Sync with Firestore for parity
             if self.use_firestore:
-                fs_data = self.firestore.get_document(Config.COL_BANKROLL, "current_state")
-                if fs_data:
-                    self._save_local(fs_data)
-                    return float(fs_data.get("current_bankroll", Config.INITIAL_BANKROLL))
+                try:
+                    fs_data = self.firestore.get_document(Config.COL_BANKROLL, "current_state")
+                    if fs_data:
+                        self._save_local(fs_data)
+                        return float(fs_data.get("current_bankroll", Config.INITIAL_BANKROLL))
+                except Exception as fe:
+                    logger.debug(f"Firestore bankroll sync skipped: {fe}")
             
             data = self._load_local()
             return float(data.get("current_bankroll", Config.INITIAL_BANKROLL))
@@ -69,6 +88,7 @@ class BankrollManager:
         """
         Updates the bankroll with new PnL after a meeting settlement.
         """
+        self._ensure_initialized()
         try:
             data = self._load_local()
             

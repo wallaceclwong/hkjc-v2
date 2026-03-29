@@ -101,19 +101,25 @@ async def auto_settlement_task(meeting_date: str, venue: str):
     
     logger.error(f"❌ Auto-settlement FAILED after 8 attempts for {meeting_date} ({venue})")
 
-@app.on_event("startup")
-async def startup_event():
+async def initialize_watchdogs():
+    """Background task to initialize watchdogs without blocking server startup."""
     meeting_date, venue = get_current_meeting_info()
     if os.getenv("ENABLE_WATCHDOG", "true").lower() != "false":
         max_races = 11 if venue == "ST" else 9
-        logger.info(f"📍 Initializing Watchdog for meeting: {meeting_date} ({venue}) — {max_races} races")
+        logger.info(f"📍 Initializing Watchdogs in background for: {meeting_date} ({venue})")
         for r in range(1, max_races + 1):
             asyncio.create_task(recovery_task(race_no=r, venue=venue))
-            await asyncio.sleep(2)
+            await asyncio.sleep(1) # Reduced sleep
         
         asyncio.create_task(auto_settlement_task(meeting_date, venue))
     else:
         logger.info(f"📍 Watchdog DISABLED (ENABLE_WATCHDOG=false). Dashboard reads from Firestore only.")
+
+@app.on_event("startup")
+async def startup_event():
+    # Launch everything in the background immediately
+    asyncio.create_task(initialize_watchdogs())
+    logger.info("🚀 Dashboard Server is now READY (Watchdogs initializing in background)")
 
 # Serve static files for the dashboard
 DASHBOARD_DIR = Path(__file__).resolve().parent
