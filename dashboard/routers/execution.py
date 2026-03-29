@@ -156,16 +156,25 @@ async def trigger_watchdog(x_cloud_scheduler: str = Header(None)):
         logger.info(f"Triggering Watchdog sweep for {meeting_date} ({venue}) — {max_races} races")
         
         results = []
+        fail_count = 0
         for r in range(1, max_races + 1):
-            # We run them sequentially within the trigger to avoid OOM in small Cloud Run instances
-            # poll_and_detect already uses a lock, so this is safe and orderly.
-            alerts = await market_watchdog.poll_and_detect(r, venue)
-            results.append({"race": r, "alerts": len(alerts)})
+            try:
+                alerts = await market_watchdog.poll_and_detect(r, venue)
+                results.append({"race": r, "alerts": len(alerts), "status": "OK"})
+            except Exception as e:
+                logger.error(f"Watchdog failed for Race {r}: {e}")
+                results.append({"race": r, "error": str(e), "status": "FAIL"})
+                fail_count += 1
+        
+        # Proper Alerting Integration: Log a specific pattern for GCP
+        if fail_count > (max_races / 2):
+            logger.critical(f"❌ CRITICAL: Scraper Partial Failure! {fail_count}/{max_races} races failed to poll.")
             
         return {
             "success": True, 
             "meeting": f"{meeting_date}_{venue}",
             "sweep_results": results,
+            "fail_count": fail_count,
             "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
