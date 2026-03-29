@@ -9,7 +9,8 @@ from fastapi import APIRouter
 from loguru import logger
 
 from dependencies import (
-    DATA_DIR, BASE_DIR, execution_engine, rl_optimizer, Config
+    DATA_DIR, BASE_DIR, execution_engine, rl_optimizer, market_watchdog, Config,
+    get_current_meeting_info
 )
 from services.meeting_settlement import MeetingSettlement
 
@@ -136,3 +137,37 @@ async def update_kelly_settings(settings: dict):
     if "fraction" in settings:
         Config.KELLY_FRACTION = float(settings["fraction"])
     return {"success": True, "message": "Kelly settings updated for current session."}
+from fastapi import APIRouter, Header
+
+@router.get("/trigger/watchdog")
+async def trigger_watchdog(x_cloud_scheduler: str = Header(None)):
+    """
+    Stateless trigger for Market Watchdog.
+    Meant to be called by Google Cloud Scheduler every 2-5 minutes.
+    """
+    # Simple security check (Cloud Scheduler can send custom headers)
+    if not x_cloud_scheduler and not Config.DEBUG:
+        return {"success": False, "error": "Unauthorized. Missing trigger header."}
+
+    try:
+        meeting_date, venue = get_current_meeting_info()
+        max_races = 11 if venue == "ST" else 9
+        
+        logger.info(f"Triggering Watchdog sweep for {meeting_date} ({venue}) — {max_races} races")
+        
+        results = []
+        for r in range(1, max_races + 1):
+            # We run them sequentially within the trigger to avoid OOM in small Cloud Run instances
+            # poll_and_detect already uses a lock, so this is safe and orderly.
+            alerts = await market_watchdog.poll_and_detect(r, venue)
+            results.append({"race": r, "alerts": len(alerts)})
+            
+        return {
+            "success": True, 
+            "meeting": f"{meeting_date}_{venue}",
+            "sweep_results": results,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Watchdog trigger failed: {e}")
+        return {"success": False, "error": str(e)}

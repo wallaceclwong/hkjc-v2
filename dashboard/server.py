@@ -103,6 +103,12 @@ async def auto_settlement_task(meeting_date: str, venue: str):
 
 async def initialize_watchdogs():
     """Background task to initialize watchdogs without blocking server startup."""
+    # Check if we should even run the internal loop (default true for local, false for cloud/proper)
+    enable_loop = os.getenv("ENABLE_WATCHDOG_LOOP", "true").lower() == "true"
+    if not enable_loop:
+        logger.info("📍 Internal Watchdog loop DISABLED (Using Cloud Scheduler mode).")
+        return
+
     meeting_date, venue = get_current_meeting_info()
     if os.getenv("ENABLE_WATCHDOG", "true").lower() != "false":
         max_races = 11 if venue == "ST" else 9
