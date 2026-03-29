@@ -17,12 +17,14 @@ from google import genai
 from google.genai import types
 from google.oauth2 import service_account
 
+from config.settings import Config
+
 LOG_FILE = "/var/log/hkjc_model_health.log"
-ENDPOINT = "projects/386233903900/locations/us-central1/endpoints/4458018823085228032"
-MODEL_ID = "projects/386233903900/locations/us-central1/models/5265445736698347520"
-PROJECT = "386233903900"
-LOCATION = "us-central1"
-FALLBACK = "gemini-2.5-flash"
+ENDPOINT = Config.TUNED_MODEL_ENDPOINT
+MODEL_ID = os.getenv("TUNED_MODEL_ID", "")  # Full model resource name for redeploy
+PROJECT = Config.MODEL_PROJECT_ID
+LOCATION = Config.GCP_LOCATION
+FALLBACK = Config.GEMINI_MODEL_FALLBACK
 ENV_FILE = os.getenv("ENV_FILE", "/opt/hkjc/.env")
 
 

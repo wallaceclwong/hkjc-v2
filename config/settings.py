@@ -10,17 +10,17 @@ class Config:
     REGION = os.getenv("GCP_REGION", "asia-east1")
     FIRESTORE_DATABASE = os.getenv("FIRESTORE_DATABASE", "(default)")
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-    MODEL_PROJECT_ID = os.getenv("VERTEX_MODEL_PROJECT", PROJECT_ID)
+    MODEL_PROJECT_ID = os.getenv("VERTEX_MODEL_PROJECT", PROJECT_ID)  # Consolidated: same as PROJECT_ID
     GOOGLE_APPLICATION_CREDENTIALS = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
     
     # AI Config
-    TUNED_MODEL_ENDPOINT = os.getenv("TUNED_MODEL_ENDPOINT", "projects/386233903900/locations/us-central1/endpoints/4458018823085228032")
-    GEMINI_MODEL = os.getenv("GEMINI_MODEL", TUNED_MODEL_ENDPOINT)  # Fine-tuned hkjc_flash_full_8yr_v1
+    TUNED_MODEL_ENDPOINT = os.getenv("TUNED_MODEL_ENDPOINT", "")
+    GEMINI_MODEL = os.getenv("GEMINI_MODEL", TUNED_MODEL_ENDPOINT) or "gemini-2.5-flash"  # Falls back if endpoint not set
     GEMINI_MODEL_FALLBACK = "gemini-2.5-flash"  # For weather intel and non-prediction tasks
     SHADOW_MODEL = os.getenv("SHADOW_MODEL", "gemini-2.5-pro")  # A/B test: shadow model runs in parallel
     USE_VERTEX_AI = os.getenv("USE_VERTEX_AI", "True").lower() == "true"
     GCP_LOCATION = "us-central1"       # Models are confirmed available here
-    GCS_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME", "hkjc-vault-6172aadc")
+    GCS_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME", "hkjc-v2-vault-316780")
     
     # --- Betting Account (User must fill these in .env) ---
     HKJC_ACCOUNT = os.getenv("HKJC_ACCOUNT", "YOUR_ACCOUNT_ID")

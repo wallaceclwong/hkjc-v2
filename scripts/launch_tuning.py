@@ -8,13 +8,13 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config.settings import Config
 
 def launch_tuning(train_data_uri, model_name="publishers/google/models/gemini-2.5-flash", job_display_name="hkjc_flash_tuning_v2_5"):
-    project_number = "386233903900" 
-    print(f"Initializing Vertex AI Client with Project Number {project_number}...")
-    os.environ["GOOGLE_CLOUD_PROJECT"] = project_number
+    project_id = Config.MODEL_PROJECT_ID
+    print(f"Initializing Vertex AI Client with Project {project_id}...")
+    os.environ["GOOGLE_CLOUD_PROJECT"] = project_id
     
     client = genai.Client(
         vertexai=True,
-        project=project_number,
+        project=project_id,
         location=Config.GCP_LOCATION
     )
     

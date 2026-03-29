@@ -2,6 +2,7 @@ import os
 import sys
 from pathlib import Path
 from google.cloud import monitoring_v3
+from google.oauth2 import service_account
 from google.api_core.exceptions import AlreadyExists, InvalidArgument
 from loguru import logger
 
@@ -11,8 +12,16 @@ sys.path.insert(0, root_dir)
 
 from config.settings import Config
 
+def get_credentials():
+    creds_path = os.path.join(root_dir, "service-account-key.json")
+    if os.path.exists(creds_path):
+        logger.info(f"📂 Using service account key: {creds_path}")
+        return service_account.Credentials.from_service_account_file(creds_path)
+    return None
+
 def create_notification_channel(project_id, email_address):
-    client = monitoring_v3.NotificationChannelServiceClient()
+    creds = get_credentials()
+    client = monitoring_v3.NotificationChannelServiceClient(credentials=creds)
     project_name = f"projects/{project_id}"
     
     # Check if channel already exists with this email
@@ -37,7 +46,8 @@ def create_notification_channel(project_id, email_address):
         raise
 
 def create_alert_policy(project_id, channel_name):
-    client = monitoring_v3.AlertPolicyServiceClient()
+    creds = get_credentials()
+    client = monitoring_v3.AlertPolicyServiceClient(credentials=creds)
     project_name = f"projects/{project_id}"
     
     service_name = "hkjc-predictor"
@@ -67,7 +77,6 @@ def create_alert_policy(project_id, channel_name):
     )
 
     # Policy 2: Scraper Timeout (Log-based)
-    # Using a simple metric threshold on log count if possible, or just a match
     policy_scraper = monitoring_v3.AlertPolicy(
         display_name="HKJC-V2: Scraper Timeout Detection",
         notification_channels=[channel_name],
@@ -80,6 +89,11 @@ def create_alert_policy(project_id, channel_name):
                 )
             )
         ],
+        alert_strategy=monitoring_v3.AlertPolicy.AlertStrategy(
+            notification_rate_limit=monitoring_v3.AlertPolicy.AlertStrategy.NotificationRateLimit(
+                period={"seconds": 3600} # 1 hour between repeating alerts
+            )
+        )
     )
 
     for p in [policy_5xx, policy_scraper]:
@@ -92,7 +106,7 @@ def create_alert_policy(project_id, channel_name):
             logger.error(f"❌ Failed to create alert policy {p.display_name}: {e}")
 
 if __name__ == "__main__":
-    project_id = os.getenv("PROJECT_ID", "hkjc-training")
+    project_id = Config.PROJECT_ID
     email = "wallaceclwong@gmail.com"
     
     logger.info(f"🚀 Provisioning Alerts for {project_id}...")

@@ -42,7 +42,7 @@ class WeatherNextClient:
             self.api_key = getattr(Config, 'GMAPS_API_KEY', None)
             
         self.oauth_token = None
-        self.project_id = "project-sentinel-2026" # Quota project for OAuth
+        self.project_id = Config.PROJECT_ID # Quota project for OAuth
             
         self._client = httpx.AsyncClient(timeout=10.0)
 
