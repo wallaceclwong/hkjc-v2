@@ -14,6 +14,7 @@ from config.settings import Config
 from services.odds_ingest import OddsIngest
 from services.browser_manager import BrowserManager
 from services.firestore_service import FirestoreService
+from services.bankroll_manager import BankrollManager
 
 class MarketWatchdog:
     def __init__(self, drop_threshold=0.20):
@@ -28,6 +29,7 @@ class MarketWatchdog:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.last_heartbeat = None
         self.firestore = FirestoreService()
+        self.bankroll_manager = BankrollManager()
         self._poll_lock = asyncio.Lock()  # Serialize browser access across races
 
     async def poll_and_detect(self, race_no: int, venue: str = "ST"):
@@ -186,7 +188,10 @@ class MarketWatchdog:
             # Sort by edge (highest first) and apply safeguards
             sorted_horses = sorted(edges.items(), key=lambda x: x[1], reverse=True)
             total_exposure = 0
-            max_exposure = Config.INITIAL_BANKROLL * 0.05  # 5% of bankroll max per race
+            
+            # Fetch rolling bankroll instead of static
+            current_bankroll = self.bankroll_manager.get_current_bankroll()
+            max_exposure = current_bankroll * 0.05  # 5% of bankroll max per race
             
             for horse_no, edge in sorted_horses:
                 # Skip if edge is too small
@@ -198,7 +203,7 @@ class MarketWatchdog:
                     continue
                 
                 # Calculate stake
-                stake = round(Config.INITIAL_BANKROLL * Config.KELLY_FRACTION * edge, 2)
+                stake = round(current_bankroll * Config.KELLY_FRACTION * edge, 2)
                 
                 # Check exposure cap
                 if total_exposure + stake > max_exposure:

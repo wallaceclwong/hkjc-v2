@@ -14,12 +14,14 @@ from services.results_ingest import ResultsIngest
 from services.betting_evaluator import BettingEvaluator
 from services.firestore_service import FirestoreService
 from services.rl_optimizer import RLOptimizer
+from services.bankroll_manager import BankrollManager
 
 class MeetingSettlement:
     def __init__(self, headless=True):
         self.results_ingest = ResultsIngest(headless=headless)
         self.evaluator = BettingEvaluator()
         self.firestore = FirestoreService()
+        self.bankroll_manager = BankrollManager()
         self.reports_dir = Path("data/reports")
         self.reports_dir.mkdir(parents=True, exist_ok=True)
 
@@ -75,10 +77,14 @@ class MeetingSettlement:
             f.write(report_md)
         logger.info(f"Report saved to {report_file}")
 
-        # 4. Sync to Firestore (meeting_reports collection)
+        # 4. Sync to Firestore (meeting_reports collection) & Bankroll
         try:
             total_stake = sum(r['kelly_stake'] for r in results_list)
             total_p_l = sum(r['p_l'] for r in results_list)
+            report_id = f"{date_str}_{venue}"
+            
+            # Apply to Bankroll Manager (MEETING BY MEETING ROLL)
+            self.bankroll_manager.add_transaction(report_id, total_p_l, f"Meeting Settlement: {venue}")
             
             report_data = {
                 "meeting_date": date_str,

@@ -32,30 +32,52 @@ class KellyCriterion:
         where:
         - p is the probability of winning
         - o is the decimal odds
+        Safeguards include max 2 horses, min 5% edge, max 5% bankroll exposure per race.
         """
         stakes = {}
         if not market_odds:
             return stakes
 
+        edges = {}
         for horse_no, p in probabilities.items():
-            # Ensure horse_no is a string for lookup
             h_id = str(horse_no)
             o = market_odds.get(h_id)
-            
-            if not o or o <= 1.0:
-                continue
+            if o and o > 1.0 and p > 0:
+                # Calculate edge (f*)
+                edge = (p * o - 1) / (o - 1)
+                edges[h_id] = edge
 
-            # f_star = (p * o - 1) / (o - 1)
-            f_star = (p * o - 1) / (o - 1)
+        # Sort by edge, descending
+        sorted_horses = sorted(edges.items(), key=lambda x: x[1], reverse=True)
+        total_exposure = 0.0
+        max_exposure = self.bankroll * 0.05  # 5% max exposure per race
+
+        for h_id, edge in sorted_horses:
+            # Skip if edge is too small
+            if edge < 0.05:
+                continue
             
-            if f_star > 0:
-                # Apply fractional Kelly and Multiply by bankroll
-                stake = self.bankroll * self.fractional_kelly * f_star
-                
-                # Round to nearest dollar
-                if stake >= 1.0:
-                    stakes[h_id] = round(float(stake), 0)
-        
+            # Max 2 horses per race
+            if len(stakes) >= 2:
+                continue
+            
+            # Apply fractional Kelly to bankroll
+            stake = self.bankroll * self.fractional_kelly * edge
+            
+            # Apply exposure cap
+            if total_exposure + stake > max_exposure:
+                remaining = max_exposure - total_exposure
+                if remaining > 0:
+                    stake = remaining
+                else:
+                    break
+                    
+            # Round to nearest $10
+            stake = max(10, int(round(stake / 10) * 10))
+            
+            stakes[h_id] = float(stake)
+            total_exposure += stake
+
         return stakes
 class WeatherNextClient:
     pass
@@ -86,8 +108,12 @@ class PredictionEngine:
         self.steward = StewardAnalyser()
         self.weathernext = WeatherNextClient()
         self.pedigree = PedigreeService()
+        
+        from services.bankroll_manager import BankrollManager
+        self.bankroll_manager = BankrollManager()
+        
         self.kelly = KellyCriterion(
-            bankroll=Config.INITIAL_BANKROLL, 
+            bankroll=self.bankroll_manager.get_current_bankroll(), 
             fractional_kelly=Config.KELLY_FRACTION
         )
         self.notifications = NotificationService()
@@ -318,6 +344,9 @@ class PredictionEngine:
                 # Simple linear de-biasing
                 probs = {h: p * (1 - conf_bias) for h, p in probs.items()}
             
+            # Fetch dynamic bankroll before calculating stakes
+            self.kelly.bankroll = self.bankroll_manager.get_current_bankroll()
+            
             prediction_dict["kelly_stakes"] = self.kelly.calculate_race_stakes(
                 probs, 
                 win_odds
@@ -393,6 +422,7 @@ class PredictionEngine:
             shadow_probs = {h: p / total_prob for h, p in shadow_probs.items()}
             shadow_dict["probabilities"] = shadow_probs
 
+        self.kelly.bankroll = self.bankroll_manager.get_current_bankroll()
         shadow_dict["kelly_stakes"] = self.kelly.calculate_race_stakes(shadow_probs, win_odds)
         shadow_dict["market_odds"] = win_odds
 

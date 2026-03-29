@@ -3,10 +3,14 @@ from datetime import datetime, timedelta
 import json
 from loguru import logger
 
+from loguru import logger
+
 from dependencies import (
     DATA_DIR, USE_FIRESTORE, firestore, get_latest_file, 
     get_local_ip, load_horse_names, Config
 )
+from services.bankroll_manager import BankrollManager
+bankroll_manager = BankrollManager()
 
 router = APIRouter()
 
@@ -38,28 +42,8 @@ async def get_latest():
         elif USE_FIRESTORE:
             latest_weather = firestore.get_latest(Config.COL_WEATHER, order_by="timestamp")
 
-        # 3. Latest Alerts
+        # 3. Latest Alerts (REMOVED)
         all_alerts = []
-        s_file = get_latest_file(DATA_DIR / "alerts", "alerts_*.json")
-        m_file = get_latest_file(DATA_DIR / "alerts", "market_alerts_*.json")
-        
-        alerts_list = []
-        if s_file:
-            with open(s_file, "r", encoding="utf-8") as f:
-                alerts_list += json.load(f).get("alerts", [])
-        if m_file:
-            with open(m_file, "r", encoding="utf-8") as f:
-                alerts_list += json.load(f).get("alerts", [])
-        
-        if not alerts_list and USE_FIRESTORE:
-            f_alerts = firestore.query(Config.COL_MARKET_ALERTS)
-            if f_alerts:
-                f_alerts.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
-                alerts_list += f_alerts[0].get("alerts", [])
-                logger.info(f"✅ Retrieved latest live alerts from Firestore: {f_alerts[0].get('race_id')}")
-        
-        alerts_list.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
-        all_alerts = alerts_list[:10]
 
         # 4. System Health
         health_status = {"status": "IDLE", "last_activity": "N/A"}
@@ -351,7 +335,7 @@ async def get_upcoming_top_picks(date: str = None):
             "success": True, 
             "date": target_date,
             "picks": top_picks,
-            "bankroll": Config.INITIAL_BANKROLL
+            "bankroll": bankroll_manager.get_current_bankroll()
         }
     except Exception as e:
         return {"success": False, "error": str(e)}

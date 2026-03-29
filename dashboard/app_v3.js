@@ -12,6 +12,7 @@ let allPicks      = [];   // [{race_no, horse_no, horse_name, prob, kelly_stake,
 let allPredictions= {};   // race_id -> full prediction object (loaded on demand)
 let currentRaceNo = null;
 let currentRaceId = null;
+let currentBankroll = 10000; // Updated from backend
 let meetingDate   = '';
 let meetingVenue  = '';
 let lastHash      = '';
@@ -71,6 +72,7 @@ async function poll() {
             
             // Update Bankroll Display
             if (picksData.bankroll) {
+                currentBankroll = picksData.bankroll;
                 const bankrollEl = document.getElementById('topbar-bankroll');
                 const wrap = document.getElementById('topbar-bankroll-wrap');
                 if (bankrollEl && wrap) {
@@ -458,22 +460,25 @@ async function settleMeeting() {
 function renderMain(pick, pred, alerts) {
     const main = document.getElementById('main-content');
 
+    // ── All Kelly selections for this race ──
+    const kellySels = (pick.kelly_selections && pick.kelly_selections.length > 0) ? pick.kelly_selections : (pick.kelly_stake > 0 ? [{ horse_no: pick.horse_no, kelly_stake: pick.kelly_stake, market_odds: pick.market_odds }] : []);
+    
     // ── Bet Card ──
-    const hasStake   = pick.kelly_stake > 0;
-    const bankrollPct= pick.kelly_stake ? ((pick.kelly_stake / 10000) * 100).toFixed(1) : null;
+    const hasStake   = kellySels.length > 0;
+    const totalStake = kellySels.reduce((sum, s) => sum + s.kelly_stake, 0);
+    const bankrollPct= (totalStake > 0 && currentBankroll > 0) ? ((totalStake / currentBankroll) * 100).toFixed(1) : null;
     const confPct    = Math.round((pick.prob || 0) * 100);
     const odds       = pick.market_odds > 0 ? `${pick.market_odds}×` : '--';
-    const badgeHtml  = hasStake
-        ? `<div class="best-bet-badge">★ KELLY BET RECOMMENDED</div>`
-        : `<div class="watch-badge">👁 WATCH RACE</div>`;
+    const badgeHtml  = `<div class="best-bet-badge" style="background:#3b82f6; color:#fff; border-color:#3b82f6">★ AI TOP PICK</div>`;
+    const kellyBadgeHtml = hasStake
+        ? `<div class="best-bet-badge" style="margin-top:16px; margin-bottom:4px; display:inline-block;">★ KELLY BET RECOMMENDED</div>`
+        : `<div class="watch-badge" style="margin-top:16px; margin-bottom:4px; display:inline-block;">👁 WATCH RACE</div>`;
 
-    // ── All Kelly selections for this race ──
-    const kellySels = pick.kelly_selections || (hasStake ? [{ horse_no: pick.horse_no, kelly_stake: pick.kelly_stake, market_odds: pick.market_odds }] : []);
     // Build kelly rows separately to avoid nested template literal issues
     let kellyRowsHtml = '';
-    if (kellySels.length > 1) {
+    if (kellySels.length > 0) {
         const rows = kellySels.map(function(sel) {
-            const pct = ((sel.kelly_stake / 10000) * 100).toFixed(1);
+            const pct = (currentBankroll > 0) ? ((sel.kelly_stake / currentBankroll) * 100).toFixed(1) : '0.0';
             const o   = sel.market_odds > 0 ? sel.market_odds + '×' : '--';
             const horseName = sel.horse_name
                 || (pred && pred.horse_names && pred.horse_names[sel.horse_no])
@@ -517,16 +522,8 @@ function renderMain(pick, pred, alerts) {
         }).join('');
     }
 
-    // ── Alerts pills ──
+    // ── Alerts pills (Removed) ──
     let alertsHtml = '';
-    const raceAlerts = alerts.filter(a => a.race_no === pick.race_no || !a.race_no).slice(0, 3);
-    if (raceAlerts.length || alerts.length) {
-        const displayAlerts = raceAlerts.length ? raceAlerts : alerts.slice(0, 3);
-        alertsHtml = displayAlerts.map(a => {
-            const isSmart = a.type === 'SMART MONEY' || a.severity === 'high';
-            return `<div class="alert-pill ${isSmart?'smart':'info'}"><div class="alert-dot"></div>${a.type || 'SIGNAL'} — ${a.description || a.horse_no || ''}</div>`;
-        }).join('');
-    }
 
     // ── Analysis ──
     const analysisText = pred?.analysis_markdown || 'No AI analysis available for this race yet.';
@@ -555,10 +552,11 @@ function renderMain(pick, pred, alerts) {
         </div>
         <div class="prob-bar-bg"><div class="prob-bar-fill" style="width:${confPct}%"></div></div>
       </div>
+      ${kellyBadgeHtml}
       <div class="stats-row">
         <div class="stat-box">
-          <div class="stat-label">Kelly Stake</div>
-          <div class="stat-value ${hasStake?'green':'muted'}">${hasStake ? '$'+pick.kelly_stake : 'NO BET'}</div>
+          <div class="stat-label">Total Kelly</div>
+          <div class="stat-value ${hasStake?'green':'muted'}">${hasStake ? '$'+Math.round(totalStake) : 'NO BET'}</div>
           <div class="stat-sub">${bankrollPct ? bankrollPct+'% bankroll' : 'No odds scraped'}</div>
         </div>
         <div class="stat-box">
@@ -580,9 +578,6 @@ function renderMain(pick, pred, alerts) {
     </div>
 
 
-    ${alertsHtml ? `
-    <div class="section-label">Market Signals</div>
-    <div class="alerts-row">${alertsHtml}</div>` : ''}
 
     ${runnersHtml ? `
     <div class="runners-section">
@@ -642,7 +637,7 @@ function renderMeetingOverview() {
     </div>
     <div style="margin-top: 20px; padding: 16px; background: rgba(255,193,7,0.05); border: 1px solid rgba(255,193,7,0.2); border-radius: 12px; font-size: 12px; color: var(--muted)">
         <strong>How to use:</strong> This overview shows the single highest-probability horse for each race. 
-        Click on any row to view the full race analysis, market signals, and alternative betting options.
+        Click on any row to view the full race analysis and alternative betting options.
         <div style="margin-top: 10px; opacity: 0.5; font-size: 10px; text-align: right">Build v2026.03.26.1925 (Dashboard Restoration)</div>
     </div>
     `;

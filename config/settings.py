@@ -43,6 +43,7 @@ class Config:
     COL_WEATHER = "weather_intel"
     COL_MARKET_ALERTS = "market_alerts"
     COL_REPORTS = "meeting_reports"
+    COL_BANKROLL = "bankroll"
 
     # Backfill Config
     BACKFILL_BATCH_SIZE = 5
