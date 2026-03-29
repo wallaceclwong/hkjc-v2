@@ -208,6 +208,9 @@ class MarketWatchdog:
                     else:
                         break
                 
+                # Round to nearest $10 multiple
+                stake = max(10, int(round(stake / 10) * 10))
+                
                 kelly_stakes[horse_no] = stake
                 total_exposure += stake
 
