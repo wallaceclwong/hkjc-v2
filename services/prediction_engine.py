@@ -43,6 +43,10 @@ class KellyCriterion:
             h_id = str(horse_no)
             o = market_odds.get(h_id)
             if o and o > 1.0 and p > 0:
+                # Filter: Minimum confidence threshold
+                if p < Config.MIN_CONFIDENCE:
+                    continue
+                
                 # Calculate edge (f*)
                 edge = (p * o - 1) / (o - 1)
                 edges[h_id] = edge
@@ -54,7 +58,7 @@ class KellyCriterion:
 
         for h_id, edge in sorted_horses:
             # Skip if edge is too small
-            if edge < 0.05:
+            if edge < Config.MIN_EDGE:
                 continue
             
             # Max 2 horses per race
@@ -72,8 +76,8 @@ class KellyCriterion:
                 else:
                     break
                     
-            # Round to nearest $10
-            stake = max(10, int(round(stake / 10) * 10))
+            # Round down to nearest $10 (conservative)
+            stake = max(10, int(stake // 10) * 10)
             
             stakes[h_id] = float(stake)
             total_exposure += stake
@@ -344,13 +348,30 @@ class PredictionEngine:
                 # Simple linear de-biasing
                 probs = {h: p * (1 - conf_bias) for h, p in probs.items()}
             
+            # Apply distance filter
+            distance = racecard.get("distance", 0)
+            if distance < Config.MIN_DISTANCE or distance > Config.MAX_DISTANCE:
+                logger.info(f"Skipping race {race_id}: distance {distance}m outside range [{Config.MIN_DISTANCE}-{Config.MAX_DISTANCE}]")
+                probs = {}  # Clear probabilities to prevent betting
+            
+            # Apply track-specific Kelly adjustment
+            track_multiplier = Config.TRACK_KELLY_MULTIPLIERS.get(venue, 1.0)
+            adjusted_kelly_fraction = self.kelly.fractional_kelly * track_multiplier
+            
             # Fetch dynamic bankroll before calculating stakes
             self.kelly.bankroll = self.bankroll_manager.get_current_bankroll()
+            
+            # Temporarily adjust Kelly fraction for this race
+            original_fraction = self.kelly.fractional_kelly
+            self.kelly.fractional_kelly = adjusted_kelly_fraction
             
             prediction_dict["kelly_stakes"] = self.kelly.calculate_race_stakes(
                 probs, 
                 win_odds
             )
+            
+            # Restore original fraction
+            self.kelly.fractional_kelly = original_fraction
             prediction_dict["market_odds"] = win_odds
             
             # Create Prediction object
@@ -383,10 +404,24 @@ class PredictionEngine:
             # A/B Shadow: run same prompt through shadow model (non-blocking, failures don't affect primary)
             if Config.SHADOW_MODEL and Config.SHADOW_MODEL != self.model_id:
                 try:
-                    self._run_shadow_prediction(
+                    shadow_probs = self._run_shadow_prediction(
                         prompt, response_schema, data,
                         date_str, venue, race_no
                     )
+                    
+                    # Validate model agreement before finalizing stakes
+                    if shadow_probs and prediction_dict.get("kelly_stakes"):
+                        main_probs = prediction_dict.get("probabilities", {})
+                        disagreement = self._check_model_disagreement(main_probs, shadow_probs)
+                        
+                        if disagreement:
+                            logger.warning(f"Model disagreement detected for {race_id}: {disagreement}")
+                            # Clear stakes if models disagree significantly
+                            prediction_dict["kelly_stakes"] = {}
+                            prediction_dict["model_agreement"] = False
+                        else:
+                            prediction_dict["model_agreement"] = True
+                    
                 except Exception as e:
                     print(f"[SHADOW] Shadow prediction failed (non-critical): {e}")
 
@@ -437,6 +472,9 @@ class PredictionEngine:
         with open(shadow_file, "w", encoding="utf-8") as f:
             f.write(shadow_pred.model_dump_json(indent=2))
         print(f"[SHADOW] Shadow prediction saved to {shadow_file}")
+        
+        # Return shadow probabilities for agreement check
+        return shadow_probs
 
         # Sync shadow to Firestore under separate collection
         try:
@@ -447,6 +485,25 @@ class PredictionEngine:
             )
         except Exception as e:
             print(f"[SHADOW] Firestore sync failed: {e}")
+
+    def _check_model_disagreement(self, main_probs: Dict, shadow_probs: Dict) -> str:
+        """Check if main and shadow models disagree significantly on top picks."""
+        if not main_probs or not shadow_probs:
+            return ""
+        
+        # Find top 2 picks from each model
+        main_top = sorted(main_probs.items(), key=lambda x: x[1], reverse=True)[:2]
+        shadow_top = sorted(shadow_probs.items(), key=lambda x: x[1], reverse=True)[:2]
+        
+        # Check if top picks differ significantly
+        for horse, main_prob in main_top:
+            shadow_prob = shadow_probs.get(horse, 0)
+            prob_diff = abs(main_prob - shadow_prob)
+            
+            if prob_diff > Config.SHADOW_AGREEMENT_THRESHOLD:
+                return f"Horse {horse}: Main={main_prob:.2%}, Shadow={shadow_prob:.2%} (diff={prob_diff:.2%})"
+        
+        return ""  # Models agree
 
     def _construct_prompt(self, data: Dict[str, Any]) -> str:
         racecard = data.get("racecard", {})

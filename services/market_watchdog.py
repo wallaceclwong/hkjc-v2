@@ -173,6 +173,18 @@ class MarketWatchdog:
             # Update market_odds
             pred["market_odds"] = win_odds
 
+            # Check for excessive odds movement (freeze betting if market moved too much)
+            old_odds = pred.get("market_odds", {})
+            if old_odds:
+                for horse_no, new_odds in win_odds.items():
+                    old = old_odds.get(horse_no)
+                    if old and old > 0:
+                        movement = abs(new_odds - old) / old
+                        if movement > Config.MAX_ODDS_MOVEMENT:
+                            logger.warning(f"Odds freeze: Horse {horse_no} moved {movement:.1%} (>{Config.MAX_ODDS_MOVEMENT:.0%})")
+                            # Don't update stakes if market is too volatile
+                            return
+            
             # Recalculate Kelly stakes with safeguards
             probabilities = pred.get("probabilities", {})
             kelly_stakes = {}
@@ -180,6 +192,10 @@ class MarketWatchdog:
             # Calculate edges for all horses first
             edges = {}
             for horse_no, prob in probabilities.items():
+                # Apply confidence filter
+                if prob < Config.MIN_CONFIDENCE:
+                    continue
+                    
                 odds = win_odds.get(str(horse_no))
                 if odds and odds > 1 and prob > 0:
                     edge = (prob * odds - 1) / (odds - 1)
@@ -193,17 +209,22 @@ class MarketWatchdog:
             current_bankroll = self.bankroll_manager.get_current_bankroll()
             max_exposure = current_bankroll * 0.05  # 5% of bankroll max per race
             
+            # Apply track-specific Kelly adjustment
+            venue = race_id.split("_")[1] if "_" in race_id else "ST"
+            track_multiplier = Config.TRACK_KELLY_MULTIPLIERS.get(venue, 1.0)
+            adjusted_kelly = Config.KELLY_FRACTION * track_multiplier
+            
             for horse_no, edge in sorted_horses:
                 # Skip if edge is too small
-                if edge < 0.05:  # Minimum 5% edge
+                if edge < Config.MIN_EDGE:
                     continue
                 
                 # Skip if we already have 2 horses
                 if len(kelly_stakes) >= 2:
                     continue
                 
-                # Calculate stake
-                stake = round(current_bankroll * Config.KELLY_FRACTION * edge, 2)
+                # Calculate stake with track-adjusted Kelly
+                stake = round(current_bankroll * adjusted_kelly * edge, 2)
                 
                 # Check exposure cap
                 if total_exposure + stake > max_exposure:
@@ -213,8 +234,8 @@ class MarketWatchdog:
                     else:
                         break
                 
-                # Round to nearest $10 multiple
-                stake = max(10, int(round(stake / 10) * 10))
+                # Round down to nearest $10 multiple (conservative)
+                stake = max(10, int(stake // 10) * 10)
                 
                 kelly_stakes[horse_no] = stake
                 total_exposure += stake

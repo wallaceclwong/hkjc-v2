@@ -32,6 +32,24 @@ class Config:
     # Kelly Criterion Config
     INITIAL_BANKROLL = 9000.0
     KELLY_FRACTION = 0.10  # "Tenth-Kelly" for safe real-money start
+    MIN_CONFIDENCE = 0.65  # Only bet if AI confidence > 65%
+    MIN_EDGE = 0.05  # Minimum 5% edge required
+    
+    # Track-specific adjustments
+    TRACK_KELLY_MULTIPLIERS = {
+        "ST": 1.0,   # Sha Tin - baseline
+        "HV": 0.85   # Happy Valley - more conservative
+    }
+    
+    # Distance filters (meters)
+    MIN_DISTANCE = 1000
+    MAX_DISTANCE = 2400
+    
+    # Odds movement protection
+    MAX_ODDS_MOVEMENT = 0.30  # Freeze bet if odds moved > 30% in last update
+    
+    # Model agreement threshold
+    SHADOW_AGREEMENT_THRESHOLD = 0.10  # Models must agree within 10%
     
     # Collections
     COL_FIXTURES = "fixtures"
