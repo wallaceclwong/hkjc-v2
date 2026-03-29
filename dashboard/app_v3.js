@@ -1,7 +1,7 @@
 // ─── HKJC AI — Race Day Dashboard v4 ────────────────────────────────────────
 const API = (() => {
     const host = window.location.hostname;
-    if (host === 'localhost' || host === '127.0.0.1') return 'http://localhost:8000';
+    if (!host || host === 'localhost' || host === '127.0.0.1') return 'http://localhost:8000';
     return ''; // Production uses Firebase Hosting rewrites natively
 })();
 
