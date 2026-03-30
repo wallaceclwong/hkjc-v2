@@ -95,17 +95,41 @@ python test_firestore_connection.py
 python check_gcp_services.py
 ```
 
-### Run Auto-Learning
+### Wednesday Workflow (Race Day)
+
+**Morning - Generate Predictions** (~30 min, costs $2.20):
 ```bash
-python run_full_auto_learning.py
+# 1. Fetch racecards
+python scripts/smart_racecard_fetcher.py --date 2026-04-01 --venue ST
+
+# 2. Generate ALL predictions at once
+python batch_predict.py 2026-04-01 ST 11
+
+# 3. Filter high confidence bets (>70%)
+python filter_high_confidence.py 2026-04-01 ST
+
+# 4. Review output and place bets manually
 ```
 
-### Fetch Racecards
+**Evening - Automated Learning** (~5 min, FREE):
+```bash
+# Fetch results AND run auto-learning automatically
+python auto_fetch_and_learn.py 2026-04-01 ST
+```
+
+### Manual Commands (if needed)
+
+**Fetch Racecards**:
 ```bash
 python scripts/smart_racecard_fetcher.py --date 2026-04-01 --venue ST
 ```
 
-### Start Dashboard
+**Run Auto-Learning**:
+```bash
+python run_full_auto_learning.py
+```
+
+**Start Dashboard**:
 ```bash
 python dashboard/server.py
 ```
