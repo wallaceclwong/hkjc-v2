@@ -1,190 +1,100 @@
-import json
 import os
 import sys
+import json
+import asyncio
 from pathlib import Path
 from datetime import datetime
 
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-def construct_training_prompt(data):
+from services.prediction_engine import PredictionEngine
+from config.settings import Config
+
+def create_tuning_jsonl(date_str, venue, output_file="data/tuning_dataset.jsonl"):
     """
-    Replicates the prompt structure from PredictionEngine._construct_prompt 
-    but for training data generation.
+    Scans local data for the given date/venue and creates a JSONL file
+    for Vertex AI fine-tuning.
     """
-    racecard = data.get('racecard', {})
-    results = data.get('results', {})
-    analytical = data.get('analytical', {})
-    odds = data.get('odds', {})
-    synergy = data.get('synergy', {})
-    hidden_form = data.get('hidden_form', {})
-    weather_intel = data.get('weather_intel', {})
-    pedigree_intel = data.get('pedigree_intel', {})
+    print("="*60)
+    print(f"PREPARING TUNING DATA: {date_str} {venue}")
+    print("="*60)
     
-    racecard_horses = racecard.get('horses', [])
-    horse_nos = [str(h.get('saddle_number') or h.get('horse_no') or '') for h in racecard_horses]
-    horse_nos = [n for n in horse_nos if n]
-    horse_nos_str = ", ".join(horse_nos)
-
-    prompt = f"""
-Act as a professional Hong Kong horse racing analyst. Your task is to analyze race data and provide a winning prediction.
-
-### RACE CONTEXT
-Race ID: {racecard.get('id', 'N/A')}
-Distance: {racecard.get('distance', 'N/A')}m
-Track: {racecard.get('track_type', 'N/A')}
-Class: {racecard.get('race_class', 'N/A')}
-
-### HORSE ENTRIES (Race Card)
-{json.dumps(racecard_horses, indent=2)}
-
-### ANALYTICAL DATA (Sectional Times & Positions)
-{json.dumps(analytical, indent=2)}
-
-### MARKET ODDS
-{json.dumps(odds, indent=2)}
-
-### STEWARDS' REPORTS & INCIDENTS (Human Context)
-{json.dumps(results.get('incidents', []), indent=2)}
-
-### BARRIER TRIALS (Pre-race Fitness)
-{json.dumps(analytical.get('trials', []), indent=2)}
-
-### HORSE NUMBERS TO PREDICT
-{horse_nos_str}
-
-### JOCKEY-TRAINER SYNERGY STATS
-{json.dumps(synergy, indent=2)}
-
-### HIDDEN FORM & FORGIVENESS TAGS
-{json.dumps(hidden_form, indent=2)}
-
-### WEATHER INTELLIGENCE
-{json.dumps(weather_intel, indent=2)}
-
-### PEDIGREE INTELLIGENCE
-{json.dumps(pedigree_intel, indent=2)}
-"""
-    return prompt.strip()
-
-def construct_target_response(data):
-    """
-    Creates the 'ideal' model response based on actual race results.
-    """
-    results = data.get('results', {}).get('results', [])
-    incidents = data.get('results', {}).get('incidents', [])
-    stewards_report = data.get('results', {}).get('stewards_report', 'None')
+    engine = PredictionEngine()
+    results_dir = Path("data/results")
     
-    # 1. Determine the winner
-    winner_no = ""
-    winner_name = ""
-    for r in results:
-        placing = str(r.get('plc') or r.get('placing') or '')
-        if placing == "1":
-            winner_no = str(r.get('horse_no'))
-            winner_name = r.get('horse_name', 'Winner')
-            break
-            
-    # 2. Build probabilities (1.0 for winner, 0.0 for others for strict SFT)
-    probabilities = {}
-    racecard_horses = data.get('racecard', {}).get('horses', [])
-    for h in racecard_horses:
-        h_no = str(h.get('saddle_number') or h.get('horse_no') or '')
-        if h_no:
-            probabilities[h_no] = 1.0 if h_no == winner_no else 0.0
-
-    # 3. Build Analysis Markdown
-    analysis = f"The race was won by **{winner_name}** (No. {winner_no}).\n\n"
-    if stewards_report:
-        analysis += f"### Stewards' Observations:\n{stewards_report}\n\n"
+    # We'll collect all results for this date
+    result_files = list(results_dir.glob(f"results_{date_str}_{venue}_R*.json"))
     
-    target = {
-        "confidence_score": 0.95,
-        "is_best_bet": True if winner_no else False,
-        "recommended_bet": f"WIN {winner_no}" if winner_no else "NO BET",
-        "probabilities": probabilities,
-        "analysis_markdown": analysis
-    }
-    return json.dumps(target, indent=2)
-
-def prepare_tuning_data(limit=50, output_file="data/tuning_canary_50.jsonl"):
-    from config.settings import Config
-    base_dir = Config.BASE_DIR
-    results_dir = base_dir / "data/results"
-    data_dir = base_dir / "data"
-    
-    result_files = sorted(list(results_dir.glob("results_*.json")), reverse=True)
+    if not result_files:
+        print(f"[ERROR] No results found for {date_str} {venue}")
+        return
+        
+    print(f"Found {len(result_files)} races to process")
     
     count = 0
-    print(f"Sampling {limit} races for tuning into {output_file}...")
-    
-    with open(output_file, 'w', encoding='utf-8') as f_out:
-        for rf in result_files:
-            if count >= limit: break
-            
+    with open(output_file, "a", encoding="utf-8") as out:
+        for res_path in result_files:
             try:
-                # Extract ID components
-                parts = rf.stem.split("_")
-                date_str = parts[1]
-                venue = parts[2]
-                race_no = parts[3]
+                # Extract race info
+                race_id = res_path.stem.replace("results_", "")
+                parts = race_id.split("_")
+                race_no = int(parts[2][1:]) # R1 -> 1
                 
-                with open(rf, 'r', encoding='utf-8') as f:
-                    res_data = json.load(f)
+                # Load full data context (as if predicting)
+                # Using engine.load_race_data to get complete context
+                data = asyncio.run(engine.load_race_data(date_str, venue, race_no))
                 
-                date_compact = date_str.replace("-", "")
-                rc_file = data_dir / f"racecard_{date_compact}_{race_no}.json"
+                if not data["racecard"] or not data["results"]:
+                    continue
                 
-                if rc_file.exists():
-                    with open(rc_file, 'r', encoding='utf-8') as f:
-                        rc_data = json.load(f)
-                else:
-                    skeleton_horses = []
-                    for r in res_data.get("results", []):
-                        skeleton_horses.append({
-                            "saddle_number": int(r["horse_no"]) if r["horse_no"].isdigit() else 0,
-                            "horse_name": r.get("brand_id", ""), 
-                            "jockey": r.get("jockey", ""),
-                            "trainer": r.get("trainer", ""),
-                            "weight": 133,
-                        })
-                    rc_data = {"id": f"{date_str}_{race_no}", "distance": 1200, "horses": skeleton_horses}
-                    
-                ana_file = data_dir / "analytical" / f"analytical_{date_str}_{venue}_{race_no}.json"
-                if not ana_file.exists(): continue
-                with open(ana_file, 'r', encoding='utf-8') as f:
-                    ana_data = json.load(f)
-                    
-                data = {
-                    "racecard": rc_data, "results": res_data, "analytical": ana_data,
-                    "odds": {}, "synergy": {}, "hidden_form": {}, "weather_intel": {}, "pedigree_intel": {}
+                # 1. Reconstruct the Prompt
+                engine.bias_correction = {} # No bias for pure tuning data
+                prompt = engine._construct_prompt(data)
+                
+                # 2. Reconstruct the "Ideal" Output
+                # Find the winner
+                winner_no = None
+                winner_name = ""
+                for h in data["results"].get("results", []):
+                    if h.get("plc") == "1":
+                        winner_no = h.get("horse_no")
+                        winner_name = h.get("horse_name", f"Horse {winner_no}")
+                        break
+                
+                if not winner_no:
+                    continue
+                
+                # Construct ideal JSON response
+                ideal_response = {
+                    "confidence_score": 0.95,
+                    "is_best_bet": True,
+                    "recommended_bet": f"WIN {winner_no}",
+                    "probabilities": {str(winner_no): 0.60}, # Focus on winner
+                    "analysis_markdown": f"The model correctly identifies {winner_name} (#{winner_no}) as the superior athlete based on sectional consistency and class advantage."
                 }
                 
+                # 3. Create JSONL entry (Gemini Tuning Format)
                 entry = {
-                    "systemInstruction": {
-                        "role": "system",
-                        "parts": [{"text": "Act as a professional Hong Kong horse racing analyst. Analyze race data and provide a winning prediction."}]
-                    },
                     "contents": [
-                        {"role": "user", "parts": [{"text": construct_training_prompt(data)}]},
-                        {"role": "model", "parts": [{"text": construct_target_response(data)}]}
+                        {"role": "user", "parts": [{"text": prompt}]},
+                        {"role": "model", "parts": [{"text": json.dumps(ideal_response)}]}
                     ]
                 }
                 
-                f_out.write(json.dumps(entry) + "\n")
-                f_out.flush()
+                out.write(json.dumps(entry) + "\n")
                 count += 1
-                if count % 50 == 0: print(f"Processed {count}/{limit} samples...")
+                print(f"  Processed {race_id}")
                 
-            except Exception:
-                continue
+            except Exception as e:
+                print(f"  [ERROR] Race {res_path.name}: {e}")
                 
-    print(f"Success! Created {output_file} with {count} examples.")
+    print("\n" + "="*60)
+    print(f"SUCCESS! {count} examples added to {output_file}")
+    print("="*60)
 
 if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--limit", type=int, default=1000)
-    parser.add_argument("--output", type=str, default="data/tuning_subset_1000.jsonl")
-    args = parser.parse_args()
-    prepare_tuning_data(limit=args.limit, output_file=args.output)
+    # Example: Prepare data from the most recent meeting
+    date = "2026-03-29"
+    venue = "ST"
+    create_tuning_jsonl(date, venue)

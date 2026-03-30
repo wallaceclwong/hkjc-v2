@@ -127,6 +127,9 @@ class PredictionEngine:
         # Load RL Bias Correction with contextual awareness
         from services.rl_optimizer import RLOptimizer
         self.optimizer = RLOptimizer()
+        
+        from services.deep_dive_agent import DeepDiveAgent
+        self.deep_dive_agent = DeepDiveAgent()
 
 
     async def load_race_data(self, date_str: str, venue: str, race_no: int) -> Dict[str, Any]:
@@ -401,7 +404,8 @@ class PredictionEngine:
                     ev=max_stake # Using stake as a proxy since EV isn't in this schema
                 )
 
-            # A/B Shadow: run same prompt through shadow model (non-blocking, failures don't affect primary)
+            # ELITE FEATURE: Double-Model Consensus Strategy
+            # Runs Gemini 2.5 Pro and Gemini 2.0 Flash in parallel. Beta only if they agree.
             if Config.SHADOW_MODEL and Config.SHADOW_MODEL != self.model_id:
                 try:
                     shadow_probs = self._run_shadow_prediction(
@@ -415,20 +419,50 @@ class PredictionEngine:
                         disagreement = self._check_model_disagreement(main_probs, shadow_probs)
                         
                         if disagreement:
-                            logger.warning(f"Model disagreement detected for {race_id}: {disagreement}")
-                            # Clear stakes if models disagree significantly
+                            logger.warning(f"❌ CONSENSUS FAILED for {date_str}_{venue}_R{race_no}: {disagreement}")
+                            logger.warning("Clearing stakes due to model disagreement.")
                             prediction_dict["kelly_stakes"] = {}
                             prediction_dict["model_agreement"] = False
                         else:
+                            logger.info(f"✅ CONSENSUS PASSED for {date_str}_{venue}_R{race_no}")
                             prediction_dict["model_agreement"] = True
                     
                 except Exception as e:
-                    print(f"[SHADOW] Shadow prediction failed (non-critical): {e}")
+                    logger.error(f"[SHADOW] Shadow prediction failed: {e}")
+                    # If shadow fails, we default to conservative: clear stakes
+                    prediction_dict["kelly_stakes"] = {}
+                    prediction_dict["model_agreement"] = False
 
+            # Create Prediction object
+            prediction = Prediction(
+                race_id=f"{date_str}_{venue}_R{race_no}",
+                gemini_model=Config.GEMINI_MODEL,
+                **prediction_dict
+            )
+            
+            # ELITE FEATURE: Deep-Dive Agent
+            # Triggered for High-Confidence or High-Stake bets (> $150 or > 0.85 Confidence)
+            max_stake = max(prediction.kelly_stakes.values()) if prediction.kelly_stakes else 0.0
+            if prediction.confidence_score >= 0.85 or max_stake >= 150.0:
+                # Identify the top horse
+                top_horse_id = max(prediction.kelly_stakes, key=prediction.kelly_stakes.get) if prediction.kelly_stakes else None
+                if not top_horse_id and prediction.probabilities:
+                    top_horse_id = max(prediction.probabilities, key=prediction.probabilities.get)
+                
+                if top_horse_id:
+                    # Non-blocking async call (conceptual, we'll wait for now for this audit)
+                    await self.deep_dive_agent.analyze_top_horse_history(
+                        f"{date_str}_{venue}_R{race_no}", 
+                        top_horse_id, 
+                        data
+                    )
+
+            self._save_prediction(prediction)
+            
             return prediction
             
         except Exception as e:
-            print(f"Error generating prediction: {e}")
+            logger.error(f"Error generating prediction: {e}")
             return None
 
     def _run_shadow_prediction(self, prompt, response_schema, data, date_str, venue, race_no):

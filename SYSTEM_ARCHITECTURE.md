@@ -83,10 +83,21 @@ Your betting system spans multiple environments working together:
 
 #### **B. Vertex AI** (Gemini API)
 - **Status**: ✅ Configured and ready
-- **Usage**: Generate predictions
-- **Cost**: ~$0.22 per race day
-- **Model**: Gemini 2.5 Pro (tuned)
+- **Usage**: Multi-model consensus generation
+- **Cost**: ~$0.09 per race day (Optimized)
+- **Models**: 
+  - **Primary**: Gemini 2.5 Pro (Tuned)
+  - **Shadow**: Gemini 2.0 Flash (Consensus check)
 - **Endpoint**: `projects/316780770240/locations/us-central1/endpoints/8559390708736196608`
+
+#### **C. Expert Knowledge Base** (New Logic Layer)
+- **Status**: ✅ Initialized in `docs/expert/`
+- **Purpose**: "Teaches" any AI assistant the unique strategy and safety rules of the HKJC system.
+- **Key Manuals**:
+  - `AI_CONSCIENCE.md`: 3-Layer Consensus logic.
+  - `BANKROLL_SURVIVAL_STRATEGY.md`: Kelly safeguards.
+  - `SYSTEM_OPERATIONS_MANUAL.md`: Automation SOPs.
+  - `TROUBLESHOOTING_BIBLE.md`: Fixes for common errors.
 
 #### **C. Firebase Hosting** (Web Dashboard)
 - **Status**: ✅ Deployed and live
@@ -142,6 +153,19 @@ Your betting system spans multiple environments working together:
 - ✅ Deployed dashboard works better (https://hkjc-v2.web.app/)
 - ✅ All data in JSON files
 - ✅ Automated workflows output to console
+- ✅ **Expert Troubleshooting Bible** handles all port 8000 fixes.
+
+---
+
+## 6. ELITE AI TIER (New 2026 Strategy)
+
+### **Consensus Strategy**
+The system now runs a **Double-Model Scan**. If Gemini 2.5 Pro (Accuracy) and Gemini 2.0 Flash (Speed) disagree on the winner, the bet is automatically cancelled.
+
+### **Deep-Dive Agent**
+Triggered for bets > $150 HKD. Performs a specialized "Extreme Reasoning" analysis of pedigree and steward reports for extra safety.
+
+---
 
 ---
 

@@ -2,6 +2,9 @@
 
 Professional horse racing prediction engine powered by Gemini AI and Google Cloud.
 
+> [!IMPORTANT]
+> **AI EXPERT KNOWLEDGE BASE**: If you are an AI assistant helping with this project, you MUST read the [Expert Knowledge Base](file:///c:/Users/ASUS/hkjc/docs/expert/) before making any code changes. This ensures you understand the core strategy, safety buffers, and 3-layer consensus logic.
+
 ## 💻 Multi-Machine Setup (3-PC Sync)
 
 To switch between your machines seamlessly, follow this workflow:
@@ -48,6 +51,7 @@ To run this autonomously 24/7 in the cloud:
 - `services/`: Ingestion and analytical scripts.
 - `models/`: Pydantic data schemas.
 - `docs/`: Data model and architectural documentation.
+- `docs/expert/`: The "Brain" and "Expert Rules" for AI assistants.
 - `config/`: Centralized settings and environment loading.
 - `data/`: Local cache of JSON results (not synced to Git by design).
 - `Dockerfile`: Production container config.
