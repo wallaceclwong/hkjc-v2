@@ -5,7 +5,7 @@ from loguru import logger
 
 from loguru import logger
 
-from dependencies import (
+from dashboard.dependencies import (
     DATA_DIR, USE_FIRESTORE, firestore, get_latest_file, 
     get_local_ip, load_horse_names, Config
 )

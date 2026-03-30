@@ -8,8 +8,9 @@ from pydantic import BaseModel
 from fastapi import APIRouter
 from loguru import logger
 
-from dependencies import (
-    DATA_DIR, BASE_DIR, execution_engine, rl_optimizer, market_watchdog, Config,
+from dashboard.dependencies import (
+    DATA_DIR, USE_FIRESTORE, firestore, get_latest_file, 
+    get_local_ip, load_horse_names, Config,
     get_current_meeting_info
 )
 from services.meeting_settlement import MeetingSettlement

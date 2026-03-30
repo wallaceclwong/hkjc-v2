@@ -180,23 +180,62 @@ class ResultsIngest:
                         except:
                             continue
 
-            # 2. Scrape Dividends
-            div_rows = await page.query_selector_all("div.dividend_table tbody tr")
-            for row in div_rows:
-                cols = await row.query_selector_all("td")
-                if len(cols) >= 3:
-                    pool = (await cols[0].inner_text()).strip()
-                    comb = (await cols[1].inner_text()).strip()
-                    div = (await cols[2].inner_text()).strip()
-                    
-                    if "WIN" in pool and "PLACE" not in pool:
-                        dividends["WIN"].append({"combination": comb, "dividend": div})
-                    elif "PLACE" in pool and "QUINELLA" not in pool:
-                        dividends["PLACE"].append({"combination": comb, "dividend": div})
-                    elif "QUINELLA" in pool and "PLACE" not in pool:
-                        dividends["QUINELLA"].append({"combination": comb, "dividend": div})
-                    elif "QUINELLA PLACE" in pool:
-                        dividends["QUINELLA PLACE"].append({"combination": comb, "dividend": div})
+            # 2. Scrape Dividends - Parse from text content
+            content = await page.inner_text("body")
+            lines = content.split('\n')
+            
+            i = 0
+            while i < len(lines):
+                line = lines[i].strip()
+                
+                # Look for dividend section
+                if line == "Dividend":
+                    # Next line should be the table header
+                    if i + 1 < len(lines) and "Pool" in lines[i + 1]:
+                        # Skip header line
+                        i += 2
+                        # Now parse the dividend rows
+                        while i < len(lines):
+                            row = lines[i].strip()
+                            if not row or row == "Dividend Note:":
+                                break
+                            
+                            parts = row.split()
+                            if len(parts) >= 3:
+                                # Check if first part is a pool type
+                                if parts[0] in ["WIN", "PLACE", "QUINELLA", "QUINELLA PLACE"]:
+                                    pool = parts[0]
+                                    if pool == "WIN":
+                                        if len(parts) >= 3:
+                                            comb = parts[1]
+                                            div = parts[2]
+                                            dividends["WIN"].append({"combination": comb, "dividend": div})
+                                    elif pool == "PLACE":
+                                        # PLACE has multiple combinations
+                                        j = 1
+                                        while j < len(parts) - 1:
+                                            comb = parts[j]
+                                            div = parts[j + 1]
+                                            dividends["PLACE"].append({"combination": comb, "dividend": div})
+                                            j += 2
+                                    elif pool == "QUINELLA":
+                                        if len(parts) >= 3:
+                                            comb = parts[1]
+                                            div = parts[2]
+                                            dividends["QUINELLA"].append({"combination": comb, "dividend": div})
+                                    elif pool == "QUINELLA PLACE":
+                                        # QUINELLA PLACE has multiple combinations
+                                        j = 1
+                                        while j < len(parts) - 1:
+                                            comb = parts[j]
+                                            div = parts[j + 1]
+                                            dividends["QUINELLA PLACE"].append({"combination": comb, "dividend": div})
+                                            j += 2
+                            i += 1
+                    else:
+                        i += 1
+                else:
+                    i += 1
 
             # 3. Stewards Report
             report_div = await page.query_selector("div.race_incident_report")

@@ -3,7 +3,7 @@ from datetime import datetime
 from fastapi import APIRouter
 from loguru import logger
 
-from dependencies import (
+from dashboard.dependencies import (
     firestore, Config, get_current_meeting_info, USE_FIRESTORE,
     market_watchdog, HK_TZ
 )

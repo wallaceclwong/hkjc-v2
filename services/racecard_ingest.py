@@ -27,7 +27,7 @@ class RacecardIngest:
         """
         formatted_date = date_str.replace("-", "/")
         dt_iso = date_str.replace("/", "-")
-        url = f"https://racing.hkjc.com/en-us/local/information/racecard?RaceDate={formatted_date}&Racecourse={venue}&RaceNo={race_no}"
+        url = f"https://bet.hkjc.com/en/racing/home/{formatted_date}/{venue}/{race_no}"
         
         own_page = False
         context = None

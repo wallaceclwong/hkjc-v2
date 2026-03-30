@@ -16,13 +16,13 @@ from fastapi.responses import FileResponse, JSONResponse
 from loguru import logger
 
 # Import extracted global state
-from dependencies import (
+from dashboard.dependencies import (
     Config, get_current_meeting_info, market_watchdog, HK_TZ
 )
 from services.meeting_settlement import MeetingSettlement
 
 # Routers
-from routers import data, execution, debug, notifications
+from dashboard.routers import data, execution, debug, notifications
 
 # WeatherNext 2 Integration (Safe Import)
 try:
