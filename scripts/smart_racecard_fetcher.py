@@ -48,9 +48,18 @@ def get_upcoming_meetings(days_ahead=14):
     return meetings
 
 def test_racecard_availability(date_str, venue):
-    """Test if racecard is available by trying to fetch race 1."""
+    """Test if racecard is available by checking if file exists or trying to fetch."""
     print(f"Testing racecard availability for {date_str} {venue}...")
     
+    # First check if file already exists
+    date_compact = date_str.replace("-", "")
+    racecard_file = PROJECT_ROOT / "data" / f"racecard_{date_compact}_R1.json"
+    if racecard_file.exists():
+        print(f"  [OK] Racecard already exists!")
+        return True
+    
+    # If not exists, try to fetch it
+    print(f"  File not found, attempting to fetch...")
     date_fmt = date_str.replace("-", "/")
     py = str(PROJECT_ROOT / ".venv" / "Scripts" / "python.exe")
     script = str(PROJECT_ROOT / "services" / "racecard_ingest.py")
@@ -60,10 +69,8 @@ def test_racecard_availability(date_str, venue):
     
     if result.returncode == 0:
         # Check if file was created
-        date_compact = date_str.replace("-", "")
-        racecard_file = PROJECT_ROOT / "data" / f"racecard_{date_compact}_R1.json"
         if racecard_file.exists():
-            print(f"  [OK] Racecard available!")
+            print(f"  [OK] Racecard fetched successfully!")
             return True
         else:
             print(f"  [FAIL] No racecard file created")
@@ -74,31 +81,39 @@ def test_racecard_availability(date_str, venue):
 
 def fetch_all_races(date_str, venue, max_races=11):
     """Fetch all races for a meeting."""
-    print(f"\nFetching all races for {date_str} {venue}")
+    print(f"\nChecking all races for {date_str} {venue}")
     
     date_fmt = date_str.replace("-", "/")
     py = str(PROJECT_ROOT / ".venv" / "Scripts" / "python.exe")
     script = str(PROJECT_ROOT / "services" / "racecard_ingest.py")
     
     success_count = 0
-    for r in range(1, max_races + 1):
-        print(f"  Race {r}...", end=" ")
-        cmd = [py, script, "--date", date_fmt, "--venue", venue, "--race", str(r)]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, cwd=str(PROJECT_ROOT))
-        
-        if result.returncode == 0:
-            date_compact = date_str.replace("-", "")
-            racecard_file = PROJECT_ROOT / "data" / f"racecard_{date_compact}_R{r}.json"
-            if racecard_file.exists():
-                success_count += 1
-                print("[OK]")
-            else:
-                print("[FAIL] (no file)")
-        else:
-            print("[FAIL]")
+    existing_count = 0
     
-    print(f"  Successfully fetched {success_count}/{max_races} races")
-    return success_count > 0
+    for r in range(1, max_races + 1):
+        date_compact = date_str.replace("-", "")
+        racecard_file = PROJECT_ROOT / "data" / f"racecard_{date_compact}_R{r}.json"
+        
+        if racecard_file.exists():
+            existing_count += 1
+            print(f"  Race {r}... [EXISTS]")
+        else:
+            print(f"  Race {r}...", end=" ")
+            cmd = [py, script, "--date", date_fmt, "--venue", venue, "--race", str(r)]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, cwd=str(PROJECT_ROOT))
+            
+            if result.returncode == 0:
+                if racecard_file.exists():
+                    success_count += 1
+                    print("[OK]")
+                else:
+                    print("[FAIL] (no file)")
+            else:
+                print("[FAIL]")
+    
+    total_count = existing_count + success_count
+    print(f"  Total races available: {total_count}/{max_races} ({existing_count} existing, {success_count} newly fetched)")
+    return total_count > 0
 
 def main():
     parser = argparse.ArgumentParser(description="Smart Racecard Fetcher")

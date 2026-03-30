@@ -28,8 +28,21 @@ class AutoLearning:
         Triggered after a race result is available.
         Evaluates prediction accuracy and updates model if needed.
         """
+        # Try both date formats: 20260329 and 2026-03-29
         pred_file = self.predictions_dir / f"prediction_{race_id}.json"
         result_file = self.results_dir / f"results_{race_id}.json"
+        
+        # If not found, try with dash format
+        if not pred_file.exists():
+            # Convert 20260329_ST_R1 to 2026-03-29_ST_R1
+            if "_" in race_id:
+                parts = race_id.split("_")
+                date_part = parts[0]
+                if len(date_part) == 8 and date_part.isdigit():
+                    formatted_date = f"{date_part[:4]}-{date_part[4:6]}-{date_part[6:8]}"
+                    race_id_dash = f"{formatted_date}_{parts[1]}_{parts[2]}"
+                    pred_file = self.predictions_dir / f"prediction_{race_id_dash}.json"
+                    result_file = self.results_dir / f"results_{race_id_dash}.json"
         
         if not pred_file.exists() or not result_file.exists():
             logger.debug(f"Skipping auto-learning for {race_id}: missing files")
@@ -122,7 +135,7 @@ class AutoLearning:
         
         # Run optimizer on recent predictions
         try:
-            self.optimizer.run_optimization()
+            self.optimizer.optimize_from_past_days(days=7)
             logger.info("Recalibration complete")
         except Exception as e:
             logger.error(f"Recalibration failed: {e}")
