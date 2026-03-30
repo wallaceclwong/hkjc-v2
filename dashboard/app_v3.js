@@ -107,24 +107,17 @@ async function poll() {
             renderCloudSync(latestData.health?.services?.cloud_sync);
         }
 
-        if (latestData.success || picksData.success) {
+            // Always hide loader if we got a response
             const loader = document.getElementById('loading-state');
             if (loader) loader.style.display = 'none';
-        }
 
-        // Hash change check (avoid flashing if nothing changed)
-        const hash = `${allPicks.map(p=>p.kelly_stake).join(',')}|${latestData.weather?.track_condition_forecast}`;
-        if (hash !== lastHash) {
-            lastHash = hash;
-
-            // Auto-select Overview on first load
-            if (currentRaceNo === null && allPicks.length) {
+            // Auto-select Overview on first load, even if empty
+            if (currentRaceNo === null) {
                 selectRace('all');
             } else if (currentRaceNo !== null) {
                 // Re-render currently selected race with fresh data
                 await renderRaceDetail(currentRaceNo);
             }
-        }
 
     } catch(e) {
         setConnected(false);

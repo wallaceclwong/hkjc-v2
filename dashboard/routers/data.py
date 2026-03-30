@@ -221,12 +221,14 @@ async def get_upcoming_top_picks(date: str = None):
                     pred_files = list(pred_dir.glob(f"prediction_{target_date}_*.json"))
                 
                 if not pred_files:
-                    all_preds = list(pred_dir.glob("prediction_*.json"))
+                    import re
+                    valid_date_pattern = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+                    all_preds = [p for p in pred_dir.glob("prediction_*.json") if valid_date_pattern.match(p.name.split("_")[1])]
                     if all_preds:
                         all_preds.sort(key=lambda x: x.name, reverse=True)
                         target_date = all_preds[0].name.split("_")[1]
                         pred_files = list(pred_dir.glob(f"prediction_{target_date}_*.json"))
-                        print(f"[INFO] No files for tomorrow. Found next meeting: {target_date}")
+                        print(f"[INFO] Found next meeting: {target_date}")
         else:
             pred_files = list(pred_dir.glob(f"prediction_{target_date}_*.json"))
 

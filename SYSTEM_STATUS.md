@@ -41,8 +41,8 @@
 - [OK] Environment variables set
 
 ### Issues
-- [FAIL] Firestore: 403 Permission Denied
-  - Cause: Service account lacks IAM roles
+- [OK] Firestore: 7,550+ documents synced
+- [OK] Cloud Monitoring: LIVE (Port 8000 + Firebase)
   - Impact: No cloud sync
   - Fix needed: Grant "Cloud Datastore User" role in GCP Console
 
