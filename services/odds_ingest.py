@@ -21,7 +21,7 @@ class OddsIngest:
         """
         Fetches real-time Win & Place odds for a specific race.
         """
-        url = f"https://bet.hkjc.com/en/racing/wp/{venue}/{date_str}/{race_no}"
+        url = f"https://bet.hkjc.com/en/racing/wp/{date_str}/{venue}/{race_no}"
         
         page = await self.browser_mgr.get_page()
 

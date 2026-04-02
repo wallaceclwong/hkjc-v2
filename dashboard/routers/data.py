@@ -203,7 +203,7 @@ async def get_specific_prediction(race_id: str):
 
 @router.get("/picks")
 @router.get("/picks/upcoming")
-async def get_upcoming_top_picks(date: str = None):
+async def get_upcoming_top_picks(date: str = None, venue: str = None):
     """Returns the top pick for each race of the meeting (specific date or upcoming)."""
     try:
         pred_dir = DATA_DIR / "predictions"
@@ -327,15 +327,23 @@ async def get_upcoming_top_picks(date: str = None):
                             "is_best_bet":      data.get("is_best_bet", False),
                             "has_odds":         bool(market_odds),
                         }
-                        top_picks.append(pick)
+                        # Avoid duplicates - skip if this race already added from Firestore
+                        if not any(p["race_no"] == pick["race_no"] for p in top_picks):
+                            top_picks.append(pick)
                 except Exception as inner_e:
                     print(f"Error parsing {p_file.name}: {inner_e}")
 
         top_picks.sort(key=lambda x: x["race_no"])
         
+        # Determine venue from first pick
+        venue = ""
+        if top_picks:
+            venue = top_picks[0].get("race_id", "").split("_")[1] if len(top_picks[0].get("race_id", "").split("_")) > 1 else ""
+        
         return {
             "success": True, 
             "date": target_date,
+            "venue": venue,
             "picks": top_picks,
             "bankroll": bankroll_manager.get_current_bankroll()
         }

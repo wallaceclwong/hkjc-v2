@@ -61,7 +61,14 @@ def test_racecard_availability(date_str, venue):
     # If not exists, try to fetch it
     print(f"  File not found, attempting to fetch...")
     date_fmt = date_str.replace("-", "/")
-    py = str(PROJECT_ROOT / ".venv" / "Scripts" / "python.exe")
+    # Determine python executable based on OS
+    if sys.platform == 'win32':
+        py = str(PROJECT_ROOT / ".venv" / "Scripts" / "python.exe")
+    else:
+        # Check for linux venv or system python
+        venv_py = PROJECT_ROOT / ".venv" / "bin" / "python"
+        py = str(venv_py) if venv_py.exists() else "python3"
+        
     script = str(PROJECT_ROOT / "services" / "racecard_ingest.py")
     
     cmd = [py, script, "--date", date_fmt, "--venue", venue, "--race", "1"]
@@ -84,7 +91,14 @@ def fetch_all_races(date_str, venue, max_races=11):
     print(f"\nChecking all races for {date_str} {venue}")
     
     date_fmt = date_str.replace("-", "/")
-    py = str(PROJECT_ROOT / ".venv" / "Scripts" / "python.exe")
+    # Determine python executable based on OS
+    if sys.platform == 'win32':
+        py = str(PROJECT_ROOT / ".venv" / "Scripts" / "python.exe")
+    else:
+        # Check for linux venv or system python
+        venv_py = PROJECT_ROOT / ".venv" / "bin" / "python"
+        py = str(venv_py) if venv_py.exists() else "python3"
+        
     script = str(PROJECT_ROOT / "services" / "racecard_ingest.py")
     
     success_count = 0

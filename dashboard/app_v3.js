@@ -54,7 +54,7 @@ document.getElementById('fab-refresh').addEventListener('click', async () => {
 // ─── MAIN POLL ───────────────────────────────────────────────────────────────
 async function poll() {
     try {
-        const urlPicks = meetingDate ? `${API}/picks?date=${meetingDate}` : `${API}/picks/upcoming`;
+        const urlPicks = meetingDate ? `${API}/picks?date=${meetingDate}&t=${Date.now()}` : `${API}/picks/upcoming?t=${Date.now()}`;
         const urlLatest = `${API}/latest?t=${Date.now()}${meetingDate ? `&date=${meetingDate}` : ''}`;
         
         const [picksResp, latestResp] = await Promise.all([
@@ -492,15 +492,20 @@ function renderMain(pick, pred, alerts) {
         // Top 6 by probability …
         const top6 = Object.entries(pred.probabilities).sort(([,a],[,b]) => b - a).slice(0, 6);
         // … plus any Kelly horses not already in top 6
-        const top6ids = new Set(top6.map(([id]) => id));
+        const top6ids = new Set(top6.map(([id]) => String(id)));
         const extraKelly = kellySels
-            .filter(s => !top6ids.has(s.horse_no))
+            .filter(s => !top6ids.has(String(s.horse_no)))
             .map(s => [s.horse_no, pred.probabilities[s.horse_no] || 0]);
         const rows = [...top6, ...extraKelly];
         const topProb = top6[0]?.[1] || 1;
         runnersHtml = rows.map(([id, prob]) => {
+            // Skip if this horse is already shown in Kelly section
+            // Use loose equality (==) because id is string but horse_no may be number
+            const isInKellySection = kellySels.some(s => s.horse_no == id);
+            if (isInKellySection) return ''; // Skip duplicate
+            
             const pct   = Math.round((prob || 0) * 100);
-            const hasK  = kellySels.some(s => s.horse_no === id);
+            const hasK  = kellySels.some(s => s.horse_no == id);
             const name  = pred.horse_names?.[id] || ('#' + id);
             const barW  = Math.round(((prob || 0) / topProb) * 100);
             const barCol= hasK ? 'var(--green)' : 'var(--muted2)';
@@ -512,7 +517,7 @@ function renderMain(pick, pred, alerts) {
               <div class="runner-bar-bg"><div class="runner-bar-fill" style="width:${barW}%;background:${barCol}"></div></div>
               <div class="runner-prob" style="${hasK ? 'color:var(--green)' : ''}">${pct}%</div>
             </div>`;
-        }).join('');
+        }).filter(row => row !== '').join('');
     }
 
     // ── Alerts pills (Removed) ──

@@ -21,13 +21,24 @@ class RacecardIngest:
     async def fetch_racecard(self, date_str: str, venue: str, race_no: int, page=None) -> Optional[RaceCard]:
         """
         Fetches racecard data from HKJC website.
-        date_str: YYYY/MM/DD or YYYY-MM-DD
+        date_str: DD/MM/YYYY or YYYY-MM-DD
         venue: ST or HV
         race_no: int
         """
-        formatted_date = date_str.replace("-", "/")
-        dt_iso = date_str.replace("/", "-")
-        url = f"https://racing.hkjc.com/en-us/local/information/racecard?RaceDate={formatted_date}&Racecourse={venue}&RaceNo={race_no}"
+        # Convert to YYYY/MM/DD format for HKJC URL
+        if "/" in date_str:
+            # DD/MM/YYYY -> YYYY/MM/DD
+            parts = date_str.split("/")
+            if len(parts[0]) == 4:  # Already YYYY/MM/DD
+                formatted_date = date_str
+            else:  # DD/MM/YYYY
+                formatted_date = f"{parts[2]}/{parts[1]}/{parts[0]}"
+        else:
+            # YYYY-MM-DD -> YYYY/MM/DD
+            formatted_date = date_str.replace("-", "/")
+        
+        dt_iso = formatted_date.replace("/", "-")
+        url = f"https://racing.hkjc.com/en-us/local/information/racecard?racedate={formatted_date}&Racecourse={venue}&RaceNo={race_no}"
         
         own_page = False
         context = None
@@ -38,7 +49,7 @@ class RacecardIngest:
             
         try:
             print(f"[RACECARD] Navigating to {url}...")
-            await page.goto(url, wait_until="load", timeout=90000)
+            await page.goto(url, wait_until="domcontentloaded", timeout=90000)
             
             # Wait for any of the known table selectors
             table_selectors = ["table.starter", "table.table_bd.racecard", "#racecardlist table"]
@@ -88,83 +99,72 @@ class RacecardIngest:
             if class_match:
                 race_class = class_match.group(1)
 
-            # --- Horse Table Extraction ---
-            # We look for rows that have horse data
-            rows = await page.query_selector_all("tr.f_tac, table.starter tr, table.table_bd.racecard tr")
-            
-            horses = []
-            seen_saddles = set()
-            
-            for row in rows:
-                cols = await row.query_selector_all("td")
-                if len(cols) < 13:
-                    continue
-                
-                saddle_text = (await cols[0].inner_text()).strip()
-                if not saddle_text.isdigit():
-                    continue
-                
-                saddle_number = int(saddle_text)
-                if saddle_number in seen_saddles:
-                    continue # Skip duplicates if selectors overlapped
-                
-                # Column 2: Last 6 Runs
-                last_6_raw = (await cols[1].inner_text()).strip()
-                last_6 = [r.strip() for r in last_6_raw.split('/') if r.strip()]
+            # --- Ultra-Resilient Global Row Scan ---
+            horses_data = await page.evaluate(r'''() => {
+                const allRows = Array.from(document.querySelectorAll('tr'));
+                return allRows.map(row => {
+                    const cols = Array.from(row.querySelectorAll('td')).map(td => td.innerText.trim());
+                    if (cols.length < 5) return null;
 
-                # Column 4: Horse Info
-                horse_link = await cols[3].query_selector("a")
-                if not horse_link:
-                    continue
+                    const saddle = cols.find(c => /^\d+$/.test(c));
+                    if (!saddle) return null;
+
+                    // Heuristic Content Detection - Relaxed to handle VM's "Lite" layout
+                    const horse = cols.find(c => /[A-Z]{3,}/.test(c) && c === c.toUpperCase());
+                    const last_6 = cols.find(c => c.includes('/') || (c.length > 3 && /^[\d\-W/]+$/.test(c)));
+                    const weight = cols.find(c => /^\d{3}$/.test(c) && parseInt(c) > 100 && parseInt(c) < 155);
+
+                    if (!horse || !saddle) return null;
+
+                    const horseIdx = cols.indexOf(horse);
+                    return {
+                        saddle: saddle,
+                        horse: horse,
+                        last_6: last_6 || "",
+                        weight: weight || "",
+                        jockey: cols[horseIdx + 2] || cols[horseIdx + 1] || "",
+                        draw: cols[horseIdx + 3] || "",
+                        trainer: cols[horseIdx + 4] || cols[cols.length - 1] || ""
+                    };
+                }).filter(h => h !== null);
+            }''')
+
+            horses = []
+            for h in horses_data:
+                saddle_number = int(h['saddle'])
+                last_6 = [r.strip() for r in h['last_6'].split('/') if r.strip()]
                 
-                horse_name = (await horse_link.inner_text()).strip()
-                href = await horse_link.get_attribute("href")
+                horse_name = h['horse'].split('(')[0].strip()
+                brand_id = "N/A"
+                brand_match = re.search(r'\(([^)]+)\)', h['horse'])
+                if brand_match:
+                    brand_id = brand_match.group(1)
                 
-                horse_id = horse_name # Fallback
-                id_match = re.search(r'horseid=([^&]+)', href)
-                if id_match:
-                    horse_id = id_match.group(1)
+                jockey = re.sub(r'\(-?\d+\)', '', h['jockey']).strip() # Remove allowance
                 
-                # Weight (Col 5)
-                wt_text = (await cols[4].inner_text()).strip()
                 try:
-                    weight = float(wt_text)
+                    weight = float(h['weight'])
                 except:
                     weight = 133.0
-                
-                # Jockey (Col 6)
-                jockey = (await cols[5].inner_text()).strip()
-                
-                # Draw (Col 7)
-                draw_text = (await cols[6].inner_text()).strip()
+                    
                 try:
-                    draw = int(draw_text)
+                    draw = int(h['draw'])
                 except:
                     draw = 0
                 
-                # Trainer (Col 8)
-                trainer = (await cols[7].inner_text()).strip()
-                
-                # Gear (Col 13)
-                gear = (await cols[12].inner_text()).strip()
-                
-                # Owner (Col 14)
-                owner = (await cols[13].inner_text()).strip() if len(cols) > 13 else ""
-
                 entry = HorseEntry(
-                    horse_id=horse_id,
+                    horse_id=brand_id,
                     horse_name=horse_name,
-                    owner=owner,
+                    owner="",
                     saddle_number=saddle_number,
                     draw=draw,
                     jockey=jockey,
-                    trainer=trainer,
+                    trainer=h['trainer'],
                     weight=weight,
                     last_6_runs=last_6,
-                    gear=gear
+                    gear=""
                 )
                 horses.append(entry)
-                seen_saddles.add(saddle_number)
 
             if not horses:
                 print(f"[ERROR] No horses found for R{race_no}.")
@@ -213,7 +213,7 @@ async def main():
     card = await ingest.fetch_racecard(args.date, args.venue, args.race)
     if card:
         os.makedirs("data", exist_ok=True)
-        date_clean = args.date.replace("-", "")
+        date_clean = args.date.replace("-", "").replace("/", "")
         filename = f"data/racecard_{date_clean}_R{args.race}.json"
         with open(filename, "w", encoding="utf-8") as f:
             f.write(card.model_dump_json(indent=2))

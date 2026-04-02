@@ -6,7 +6,7 @@ async def debug_dividends():
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
         
-        url = "https://racing.hkjc.com/en-us/local/information/localresults?RaceDate=2026/03/29&Racecourse=ST&RaceNo=1"
+        url = "https://racing.hkjc.com/en-us/local/information/localresults?racedate=2026/03/29&Racecourse=ST&RaceNo=1"
         print(f"Loading: {url}")
         await page.goto(url)
         await page.wait_for_timeout(2000)

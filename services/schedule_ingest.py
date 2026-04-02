@@ -84,24 +84,41 @@ async def fetch_monthly_schedule(month, year):
         await browser.close()
         return march_fixtures
 
+async def fetch_season_fixtures():
+    """
+    Fetches the HKJC race schedule for the current/upcoming months in the season.
+    """
+    # Simply loops through current month + next 4 months for now
+    now = datetime.now()
+    all_fixtures = []
+    
+    for i in range(5):
+        target_month = (now.month + i - 1) % 12 + 1
+        target_year = now.year + (now.month + i - 1) // 12
+        print(f"\n--- Fetching fixtures for {target_month:02}/{target_year} ---")
+        fixtures = await fetch_monthly_schedule(target_month, target_year)
+        if fixtures:
+            all_fixtures.extend(fixtures)
+            
+    return all_fixtures
+
 async def main():
-    # Test for March 2026
-    print("Starting Monthly Schedule Ingestion Test...")
-    fixtures = await fetch_monthly_schedule(3, 2026)
+    print("="*60)
+    print("SEASON-WIDE SCHEDULE INGESTION")
+    print("="*60)
+    fixtures = await fetch_season_fixtures()
     
     if fixtures:
-        print(f"\nSuccessfully found {len(fixtures)} fixtures for March 2026:")
-        print(json.dumps(fixtures, indent=2))
+        print(f"\nSuccessfully found {len(fixtures)} fixtures for the season.")
         
-        # Create data directory if not exists
         if not os.path.exists('data'):
             os.makedirs('data')
             
-        with open('data/march_2026_fixtures.json', 'w') as f:
+        with open('data/fixtures_season.json', 'w') as f:
             json.dump(fixtures, f, indent=2)
-        print("\nStored results in data/march_2026_fixtures.json")
+        print("\nStored results in data/fixtures_season.json")
     else:
-        print("\nNo fixtures found for March 2026. Please check the site or month format.")
+        print("\nNo fixtures found. Please check connectivity.")
 
 if __name__ == "__main__":
     asyncio.run(main())

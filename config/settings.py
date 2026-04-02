@@ -32,8 +32,56 @@ class Config:
     # Kelly Criterion Config
     INITIAL_BANKROLL = 9000.0
     KELLY_FRACTION = 0.10  # "Tenth-Kelly" for safe real-money start
-    MIN_CONFIDENCE = 0.65  # Only bet if AI confidence > 65%
+    MIN_CONFIDENCE = 0.50  # Only bet if AI confidence > 50%
     MIN_EDGE = 0.05  # Minimum 5% edge required
+    
+    @staticmethod
+    def get_dynamic_confidence(race_class=None, field_size=None, track_condition=None, distance=None):
+        """
+        Calculate dynamic confidence threshold based on race conditions.
+        
+        Args:
+            race_class: Race class (1-5, where 5 is lowest) - can be string or int
+            field_size: Number of horses in the race
+            track_condition: Track condition (GOOD, YIELDING, SOFT, WET)
+            distance: Race distance in meters
+        
+        Returns:
+            float: Dynamic confidence threshold (0.3 - 0.6)
+        """
+        base = 0.35  # Start at 35% (more aggressive than current 50%)
+        
+        # Convert race_class to int if it's a string
+        if race_class:
+            try:
+                race_class = int(str(race_class).replace('CLASS', '').replace('C', ''))
+            except (ValueError, AttributeError):
+                race_class = None
+        
+        # Lower class = more upsets = higher confidence needed
+        if race_class and race_class >= 4:
+            base += 0.10  # Class 4-5 are more unpredictable
+        
+        # Larger fields = more uncertainty = higher confidence needed
+        if field_size and field_size > 12:
+            base += 0.05  # Large fields (>12 horses)
+        elif field_size and field_size < 8:
+            base -= 0.05  # Small fields (<8 horses) - more predictable
+        
+        # Wet track = more unpredictable = higher confidence needed
+        if track_condition and track_condition.upper() in ["WET", "SOFT", "YIELDING"]:
+            base += 0.10  # Wet/slow tracks increase uncertainty
+        
+        # Very short distances (<1000m) = more upsets
+        if distance and distance < 1000:
+            base += 0.05
+        
+        # Very long distances (>2000m) = more stamina tests = higher confidence needed
+        if distance and distance > 2000:
+            base += 0.05
+        
+        # Ensure confidence stays within reasonable bounds
+        return max(0.30, min(0.60, base))
     
     # Track-specific adjustments
     TRACK_KELLY_MULTIPLIERS = {

@@ -60,7 +60,7 @@ class ResultsIngest:
             return None
 
         formatted_date = dt.strftime("%Y/%m/%d")
-        url = f"https://racing.hkjc.com/en-us/local/information/localresults?RaceDate={formatted_date}&Racecourse={venue}&RaceNo={race_no}"
+        url = f"https://racing.hkjc.com/en-us/local/information/localresults?racedate={formatted_date}&Racecourse={venue}&RaceNo={race_no}"
         
         own_page = False
         if not page:

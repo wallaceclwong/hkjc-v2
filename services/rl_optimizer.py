@@ -187,10 +187,10 @@ class RLOptimizer:
             if roi < 0 or brier > 0.25:
                 logger.info(f"  Suboptimal performance in {context}. Recalibrating...")
                 if brier > 0.2:
-                    target_adj["confidence_bias"] = round(min(0.6, target_adj.get("confidence_bias", 0) + 0.05), 2)
+                    target_adj["confidence_bias"] = round(min(0.6, target_adj.get("confidence_bias", 0) + 0.10), 2)
                 if roi < 0:
-                    target_adj["sectional_weight_multiplier"] = round(min(1.5, target_adj.get("sectional_weight_multiplier", 1.0) + 0.03), 2)
-                    target_adj["synergy_weight_multiplier"] = round(max(0.6, target_adj.get("synergy_weight_multiplier", 1.0) - 0.03), 2)
+                    target_adj["sectional_weight_multiplier"] = round(min(1.5, target_adj.get("sectional_weight_multiplier", 1.0) + 0.07), 2)
+                    target_adj["synergy_weight_multiplier"] = round(max(0.6, target_adj.get("synergy_weight_multiplier", 1.0) - 0.07), 2)
             elif roi > 10:
                 logger.info(f"  Strong performance in {context}. Reinforcing...")
                 if brier < 0.15:
