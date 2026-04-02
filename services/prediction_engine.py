@@ -6,6 +6,7 @@ from google.genai import types
 from pathlib import Path
 from typing import Dict, Any, Optional
 from datetime import datetime
+from loguru import logger
 
 # Add project root to path to allow imports from config and models
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -25,7 +26,7 @@ class KellyCriterion:
         self.bankroll = bankroll
         self.fractional_kelly = fractional_kelly
 
-    def calculate_race_stakes(self, probabilities: Dict[str, float], market_odds: Dict[str, float]) -> Dict[str, float]:
+    def calculate_race_stakes(self, probabilities: Dict[str, float], market_odds: Dict[str, float], racecard: Dict[str, Any] = None) -> Dict[str, float]:
         """
         Calculates recommended stakes for each horse in a race.
         Kelly Formula: f* = (p*o - 1) / (o - 1)
@@ -43,8 +44,21 @@ class KellyCriterion:
             h_id = str(horse_no)
             o = market_odds.get(h_id)
             if o and o > 1.0 and p > 0:
-                # Filter: Minimum confidence threshold
-                if p < Config.MIN_CONFIDENCE:
+                # Filter: Minimum confidence threshold (dynamic)
+                # Calculate dynamic confidence based on race conditions
+                race_class = racecard.get('race_class')
+                field_size = len(racecard.get('horses', []))
+                track_condition = racecard.get('track_condition', 'GOOD')
+                distance = racecard.get('distance', 0)
+                
+                dynamic_confidence = Config.get_dynamic_confidence(
+                    race_class=race_class,
+                    field_size=field_size,
+                    track_condition=track_condition,
+                    distance=distance
+                )
+                
+                if p < dynamic_confidence:
                     continue
                 
                 # Calculate edge (f*)
@@ -89,6 +103,10 @@ class WeatherNextClient:
 from services.notification_service import NotificationService
 from services.bigquery_service import BigQueryService
 from services.storage_service import StorageService
+from services.stewards_analyzer import get_stewards_analyzer
+from services.live_odds_monitor import get_live_odds_monitor
+from services.ensemble_predictor import get_ensemble_predictor
+from services.race_pace_analyzer import get_race_pace_analyzer
 
 class PredictionEngine:
     def __init__(self):
@@ -278,8 +296,8 @@ class PredictionEngine:
 
         return data
 
-    async def generate_prediction(self, date_str: str, venue: str, race_no: int) -> Optional[Prediction]:
-        """Generates a prediction using Gemini based on loaded race data."""
+    async def generate_prediction(self, date_str: str, venue: str, race_no: int, use_ensemble: bool = False) -> Optional[Prediction]:
+        """Generates a prediction using Gemini or Ensemble based on loaded race data."""
         data = await self.load_race_data(date_str, venue, race_no)
         
         if not data["racecard"]:
@@ -295,8 +313,15 @@ class PredictionEngine:
         # Construct the prompt
         prompt = self._construct_prompt(data)
 
-        
-        print(f"Generating prediction for {date_str} {venue} R{race_no}...")
+        if use_ensemble:
+            print(f"[ENSEMBLE] Generating ensemble prediction for {date_str} {venue} R{race_no}...")
+            return await self._generate_ensemble_prediction(date_str, venue, race_no, prompt, data)
+        else:
+            print(f"Generating prediction for {date_str} {venue} R{race_no}...")
+            return await self._generate_single_prediction(date_str, venue, race_no, prompt, data)
+    
+    async def _generate_single_prediction(self, date_str: str, venue: str, race_no: int, prompt: str, data: Dict) -> Optional[Prediction]:
+        """Generate prediction using single model (original logic)"""
         try:
             # Define dynamic probability properties for the schema
             racecard = data.get("racecard", {})
@@ -351,11 +376,92 @@ class PredictionEngine:
                 # Simple linear de-biasing
                 probs = {h: p * (1 - conf_bias) for h, p in probs.items()}
             
+            # Apply Stewards Report Analysis
+            stewards_analyzer = get_stewards_analyzer()
+            stewards_reports = self._extract_stewards_reports_from_racecard(racecard)
+            
+            if stewards_reports:
+                print(f"[STEWARDS] Analyzing {len(stewards_reports)} horse reports...")
+                probs = stewards_analyzer.adjust_probabilities(probs, stewards_reports)
+                
+                # Log summary of adjustments
+                for horse_no in list(probs.keys())[:3]:  # Show top 3
+                    original_prob = prediction_dict.get("probabilities", {}).get(horse_no, 0)
+                    adjusted_prob = probs.get(horse_no, 0)
+                    if original_prob > 0 and adjusted_prob < original_prob:
+                        reduction = (original_prob - adjusted_prob) / original_prob
+                        print(f"[STEWARDS] Horse #{horse_no}: {original_prob:.1%} → {adjusted_prob:.1%} ({reduction:.1%} reduction)")
+            
+            # Update probabilities with stewards-adjusted values
+            prediction_dict["probabilities"] = probs
+            
+            # Apply Live Odds Integration
+            live_odds_monitor = get_live_odds_monitor()
+            race_id = f"{date_str}_{venue}_R{race_no}"
+            
+            # Load current odds state
+            odds_state = live_odds_monitor.update_race_state(date_str, venue, race_no)
+            
+            if odds_state and odds_state.movements:
+                print(f"[LIVE ODDS] Analyzing odds movements for {race_id}")
+                print(f"  Market confidence: {odds_state.market_confidence:.1%}")
+                print(f"  Late money horses: {odds_state.late_money_horses}")
+                
+                # Adjust probabilities based on odds
+                probs = live_odds_monitor.adjust_probabilities(probs, race_id)
+                
+                # Log significant adjustments
+                for horse_no, movement in odds_state.movements.items():
+                    if movement.trend != 'stable':
+                        print(f"  Horse #{horse_no}: {movement.trend} ({movement.movement_pct:+.1%})")
+            else:
+                print(f"[LIVE ODDS] No odds data available for {race_id}")
+            
+            # Apply Race Pace Analysis
+            try:
+                race_pace_analyzer = get_race_pace_analyzer()
+                horse_list = list(probs.keys())
+                
+                if horse_list:
+                    pace_analysis, profiles = race_pace_analyzer.analyze_race(race_id, horse_list)
+                    
+                    if pace_analysis.pace_confidence > 0.5:
+                        print(f"[RACE PACE] Analyzing pace scenario for {race_id}")
+                        print(f"  Predicted pace: {pace_analysis.predicted_pace.value}")
+                        print(f"  Confidence: {pace_analysis.pace_confidence:.1%}")
+                        
+                        # Adjust probabilities based on pace
+                        probs = race_pace_analyzer.adjust_probabilities_for_pace(probs, pace_analysis, profiles)
+                        
+                        # Log beneficiaries and victims
+                        if pace_analysis.pace_beneficiaries:
+                            print(f"  Pace beneficiaries: {pace_analysis.pace_beneficiaries}")
+                        if pace_analysis.pace_victims:
+                            print(f"  Pace victims: {pace_analysis.pace_victims}")
+                    else:
+                        print(f"[RACE PACE] Low confidence pace analysis for {race_id}, skipping")
+            except Exception as e:
+                logger.warning(f"[RACE PACE] Error in pace analysis: {e}")
+            
             # Apply distance filter
             distance = racecard.get("distance", 0)
             if distance < Config.MIN_DISTANCE or distance > Config.MAX_DISTANCE:
-                logger.info(f"Skipping race {race_id}: distance {distance}m outside range [{Config.MIN_DISTANCE}-{Config.MAX_DISTANCE}]")
+                print(f"Skipping race {date_str}_{venue}_R{race_no}: distance {distance}m outside range [{Config.MIN_DISTANCE}-{Config.MAX_DISTANCE}]")
                 probs = {}  # Clear probabilities to prevent betting
+            
+            # Calculate and log dynamic confidence threshold
+            race_class = racecard.get('race_class')
+            field_size = len(racecard.get('horses', []))
+            track_condition = racecard.get('track_condition', 'GOOD')
+            
+            dynamic_confidence = Config.get_dynamic_confidence(
+                race_class=race_class,
+                field_size=field_size,
+                track_condition=track_condition,
+                distance=distance
+            )
+            
+            print(f"[DYNAMIC CONFIDENCE] {date_str}_{venue}_R{race_no}: {dynamic_confidence:.2f} (class={race_class}, field={field_size}, track={track_condition}, dist={distance}m)")
             
             # Apply track-specific Kelly adjustment
             track_multiplier = Config.TRACK_KELLY_MULTIPLIERS.get(venue, 1.0)
@@ -370,7 +476,8 @@ class PredictionEngine:
             
             prediction_dict["kelly_stakes"] = self.kelly.calculate_race_stakes(
                 probs, 
-                win_odds
+                win_odds,
+                racecard
             )
             
             # Restore original fraction
@@ -462,7 +569,7 @@ class PredictionEngine:
             return prediction
             
         except Exception as e:
-            logger.error(f"Error generating prediction: {e}")
+            print(f"Error generating prediction: {e}")
             return None
 
     def _run_shadow_prediction(self, prompt, response_schema, data, date_str, venue, race_no):
@@ -552,10 +659,32 @@ class PredictionEngine:
             horse_nos = [str(h.get('horse_no', '')) for h in racecard_horses if h.get('horse_no')]
         
         horse_nos_str = ", ".join(horse_nos)
+        
+        # Check if we have actual winners (Audit Mode)
+        actual_winner = ""
+        for div in results.get("dividends", {}).get("WIN", []):
+            actual_winner = div.get("combination")
+            break
+            
+        is_audit = bool(actual_winner)
 
         prompt = f"""
-Act as a professional Hong Kong horse racing analyst. Your task is to analyze race data and provide a winning prediction.
+Act as a professional Hong Kong horse racing analyst. 
+{ 'You are performing a POST-RACE AUDIT.' if is_audit else 'Your task is to analyze race data and provide a winning prediction.' }
+"""
 
+        if is_audit:
+            prompt += f"""
+### ACTUAL RESULTS (Audit Context)
+RACE OVER: The actual winner was Horse #{actual_winner}.
+Dividends: {json.dumps(results.get('dividends', {}), indent=2)}
+
+INSTRUCTION: Since the race is already finished, your analysis must reflect the actual outcome. 
+If your predicted probabilities (based on form) favored a horse that lost, explain what went wrong (e.g., using Stewards' incidents).
+Do NOT claim you won if the result shows you lost.
+"""
+
+        prompt += f"""
 ### RACE CONTEXT
 Race ID: {racecard.get('id', 'N/A')}
 Distance: {racecard.get('distance', 'N/A')}m
@@ -629,6 +758,129 @@ Provide a JSON object following this structure:
 CRITICAL: You MUST provide a win probability for EACH of these horse numbers: {horse_nos_str}. The sum of all probabilities MUST be 1.0.
 """
         return prompt
+
+    async def _generate_ensemble_prediction(self, date_str: str, venue: str, race_no: int, prompt: str, data: Dict) -> Optional[Prediction]:
+        """Generate prediction using ensemble of multiple models"""
+        ensemble_predictor = get_ensemble_predictor()
+        
+        # Define response schema
+        racecard = data.get("racecard", {})
+        horses = racecard.get("horses", [])
+        prob_props = {
+            str(h.get("saddle_number") or h.get("horse_no")): {"type": "number"}
+            for h in horses
+        }
+        
+        response_schema = {
+            "type": "object",
+            "properties": {
+                "confidence_score": {"type": "number"},
+                "is_best_bet": {"type": "boolean"},
+                "recommended_bet": {"type": "string"},
+                "probabilities": {
+                    "type": "object",
+                    "properties": prob_props,
+                    "required": list(prob_props.keys())
+                },
+                "analysis_markdown": {"type": "string"}
+            },
+            "required": ["confidence_score", "is_best_bet", "recommended_bet", "probabilities", "analysis_markdown"]
+        }
+        
+        try:
+            # Run ensemble prediction
+            ensemble_result = await ensemble_predictor.predict_ensemble(
+                prompt, response_schema, data, date_str, venue, race_no
+            )
+            
+            # Check if ensemble should be skipped due to disagreement
+            should_skip, reason = ensemble_predictor.should_skip_ensemble(ensemble_result)
+            if should_skip:
+                print(f"[ENSEMBLE] SKIPPED: {reason}")
+                print("[ENSEMBLE] Falling back to single model prediction")
+                return await self._generate_single_prediction(date_str, venue, race_no, prompt, data)
+            
+            # Create prediction dict from ensemble result
+            prediction_dict = {
+                "confidence_score": ensemble_result.ensemble_confidence,
+                "is_best_bet": ensemble_result.ensemble_confidence > 0.7,
+                "recommended_bet": ensemble_result.ensemble_bet,
+                "probabilities": ensemble_result.ensemble_probabilities,
+                "analysis_markdown": f"### Ensemble Prediction\n\n**Models Used:** {', '.join([p.model_name for p in ensemble_result.model_predictions])}\n\n**Agreement Score:** {ensemble_result.agreement_score:.2f}\n\n**Consensus Horses:** {', '.join(ensemble_result.consensus_horses) if ensemble_result.consensus_horses else 'None'}\n\n**Model Weights:** {', '.join([f'{k}: {v:.2f}' for k, v in ensemble_result.weighting_used.items()])}\n\n",
+                "ensemble_metadata": ensemble_predictor.get_ensemble_summary(ensemble_result)
+            }
+            
+            # Apply all existing enhancements (Stewards, Live Odds, etc.)
+            probs = prediction_dict["probabilities"]
+            
+            # Apply Stewards Report Analysis
+            stewards_analyzer = get_stewards_analyzer()
+            racecard = data.get("racecard", {})
+            stewards_reports = self._extract_stewards_reports_from_racecard(racecard)
+            
+            if stewards_reports:
+                print(f"[STEWARDS] Analyzing {len(stewards_reports)} horse reports...")
+                probs = stewards_analyzer.adjust_probabilities(probs, stewards_reports)
+            
+            # Apply Live Odds Integration
+            live_odds_monitor = get_live_odds_monitor()
+            race_id = f"{date_str}_{venue}_R{race_no}"
+            odds_state = live_odds_monitor.update_race_state(date_str, venue, race_no)
+            
+            if odds_state and odds_state.movements:
+                print(f"[LIVE ODDS] Analyzing odds movements for {race_id}")
+                probs = live_odds_monitor.adjust_probabilities(probs, race_id)
+            
+            # Update probabilities
+            prediction_dict["probabilities"] = probs
+            
+            # Apply distance filter
+            distance = racecard.get("distance", 0)
+            if distance < Config.MIN_DISTANCE or distance > Config.MAX_DISTANCE:
+                print(f"Skipping race {race_id}: distance {distance}m outside range")
+                probs = {}
+                prediction_dict["probabilities"] = probs
+            
+            # Calculate Kelly stakes
+            win_odds = data.get("odds", {}).get("win_odds", {})
+            kelly = KellyCriterion(bankroll=self.bankroll_manager.get_current_bankroll())
+            prediction_dict["kelly_stakes"] = kelly.calculate_race_stakes(probs, win_odds, racecard)
+            
+            # Create Prediction object
+            prediction = Prediction(
+                race_id=race_id,
+                gemini_model="ensemble",
+                **prediction_dict
+            )
+            
+            self._save_prediction(prediction)
+            return prediction
+            
+        except Exception as e:
+            print(f"[ENSEMBLE] Error: {e}")
+            print("[ENSEMBLE] Falling back to single model prediction")
+            return await self._generate_single_prediction(date_str, venue, race_no, prompt, data)
+
+    def _extract_stewards_reports_from_racecard(self, racecard: Dict) -> Dict[str, str]:
+        """Extract stewards reports for each horse from racecard data"""
+        stewards_reports = {}
+        
+        # Try to get stewards reports from racecard
+        horses = racecard.get('horses', [])
+        for horse in horses:
+            horse_no = str(horse.get('horse_no', ''))
+            # Look for stewards report in horse data
+            stewards_text = horse.get('stewards_report') or horse.get('incident') or horse.get('comments', '')
+            if stewards_text:
+                stewards_reports[horse_no] = stewards_text
+        
+        # If no reports in racecard, try to get from recent results
+        if not stewards_reports:
+            # This would require fetching recent race results
+            # For now, return empty dict
+            pass
+        
+        return stewards_reports
 
     def _save_prediction(self, prediction: Prediction):
         filename = self.predictions_dir / f"prediction_{prediction.race_id}.json"
