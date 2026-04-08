@@ -209,19 +209,51 @@ async def main():
     parser.add_argument("--race", type=int, default=1)
     args = parser.parse_args()
 
-    ingest = RacecardIngest(headless=True)
-    card = await ingest.fetch_racecard(args.date, args.venue, args.race)
-    if card:
-        os.makedirs("data", exist_ok=True)
-        date_clean = args.date.replace("-", "").replace("/", "")
-        filename = f"data/racecard_{date_clean}_R{args.race}.json"
-        with open(filename, "w", encoding="utf-8") as f:
-            f.write(card.model_dump_json(indent=2))
-        print(f"Racecard saved to {filename}")
-    else:
-        print("Scrape FAILED.")
+    max_retries = 3
+    retry_delay = 2  # seconds
     
-    await ingest.browser_mgr.stop()
+    for attempt in range(max_retries):
+        ingest = None
+        try:
+            ingest = RacecardIngest(headless=True)
+            card = await ingest.fetch_racecard(args.date, args.venue, args.race)
+            
+            if card:
+                os.makedirs("data", exist_ok=True)
+                date_clean = args.date.replace("-", "").replace("/", "")
+                filename = f"data/racecard_{date_clean}_R{args.race}.json"
+                with open(filename, "w", encoding="utf-8") as f:
+                    f.write(card.model_dump_json(indent=2))
+                print(f"Racecard saved to {filename}")
+                if ingest:
+                    await ingest.browser_mgr.stop()
+                return  # Success - exit
+            else:
+                print(f"Attempt {attempt + 1}/{max_retries}: Scrape returned no data")
+                
+        except Exception as e:
+            print(f"Attempt {attempt + 1}/{max_retries}: Error - {e}")
+            # Check if it's a browser lock issue
+            if "lock" in str(e).lower():
+                print("  -> Browser profile locked. Cleaning up and retrying...")
+        
+        finally:
+            # Always cleanup browser between attempts
+            if ingest:
+                try:
+                    await ingest.browser_mgr.stop()
+                except:
+                    pass
+        
+        # Wait before retry (except on last attempt)
+        if attempt < max_retries - 1:
+            print(f"  -> Retrying in {retry_delay}s...")
+            await asyncio.sleep(retry_delay)
+            retry_delay *= 2  # Exponential backoff
+    
+    # All retries exhausted
+    print(f"Scrape FAILED after {max_retries} attempts.")
+    sys.exit(1)
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -10,6 +10,8 @@ from loguru import logger
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from services.weathernext_client import WeatherNextClient
+from config.settings import Config
+from services.firestore_service import FirestoreService
 
 class DeepDiveAgent:
     def __init__(self):

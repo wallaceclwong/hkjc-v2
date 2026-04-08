@@ -79,6 +79,8 @@ class AutoOrchestrator:
         tomorrow_str = (now + timedelta(days=1)).strftime("%d/%m/%Y")
         yesterday_str = (now - timedelta(days=1)).strftime("%d/%m/%Y")
 
+        py = str(Path('.venv') / 'Scripts' / 'python.exe')
+    
         # 1. Check for TODAY'S meeting (Live Betting)
         today_meeting = next((f for f in fixtures if f["date"] == today_str), None)
         if today_meeting:
@@ -88,10 +90,9 @@ class AutoOrchestrator:
             
             # If we are before the start time, start the live orchestrator
             if now < datetime.strptime(target_dt_str, "%Y-%m-%d %H:%M:%S") + timedelta(hours=6):
-                # Start live monitor - we use Popen so it doesn't block the orchestrator loop
                 self.log(f"Meeting TODAY at {today_meeting['venue']}. Starting Live Orchestrator for {target_dt_str}")
                 cmd = [
-                    sys.executable, "services/live_betting_orchestrator.py",
+                    py, "services/live_betting_orchestrator.py",
                     "--date", now.strftime("%Y/%m/%d"),
                     "--venue", today_meeting["venue"],
                     "--target-time", target_dt_str
@@ -116,7 +117,8 @@ class AutoOrchestrator:
             if not has_racecards or (not has_early_odds and now.hour >= 14):
                 status_msg = "Initial Prep" if not has_racecards else "Early Odds Sweep"
                 self.log(f"Meeting TOMORROW at {tomorrow_meeting['venue']}. Running {status_msg}...")
-                self.run_task([sys.executable, "services/daily_runner.py", "--date", iso_tomorrow])
+                # Use pc_race_day.py for full workflow with VM sync
+                self.run_task([py, "scripts/pc_race_day.py", "--date", iso_tomorrow, "--venue", tomorrow_meeting["venue"]])
 
         # 3. Check for YESTERDAY'S meeting (Settlement)
         yesterday_meeting = next((f for f in fixtures if f["date"] == yesterday_str), None)
@@ -125,10 +127,10 @@ class AutoOrchestrator:
             # If results don't exist yet, run results/settlement
             if not list(self.base_dir.glob(f"data/results/results_{iso_yesterday}_*.json")):
                 self.log(f"Meeting YESTERDAY at {yesterday_meeting['venue']}. Running settlement & learning...")
-                self.run_task([sys.executable, "services/daily_runner.py", "--date", iso_yesterday])
+                self.run_task([py, "services/daily_runner.py", "--date", iso_yesterday])
                 
                 # Trigger RL Recalibration specifically
-                self.run_task([sys.executable, "services/rl_optimizer.py", "--days", "7"])
+                self.run_task([py, "services/rl_optimizer.py", "--days", "7"])
                 self.log("Recalibration complete for the past week.")
 
         self.update_heartbeat("IDLE", next_task="Calendar check in 1 hour")

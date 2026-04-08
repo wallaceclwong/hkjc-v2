@@ -2,7 +2,9 @@
 const API = (() => {
     const host = window.location.hostname;
     if (!host || host === 'localhost' || host === '127.0.0.1') return 'http://localhost:8000';
-    return ''; // Production uses Firebase Hosting rewrites natively
+    // Production: Use same-origin Firebase function proxy or Firestore directly
+    // Empty string means use Firebase Hosting rewrites (configured in firebase.json)
+    return '';
 })();
 
 const POLL_MS = 5000;

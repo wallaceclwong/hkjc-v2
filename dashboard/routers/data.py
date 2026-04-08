@@ -10,7 +10,14 @@ from dashboard.dependencies import (
     get_local_ip, load_horse_names, Config
 )
 from services.bankroll_manager import BankrollManager
-bankroll_manager = BankrollManager()
+
+# Lazy-loaded bankroll manager to prevent blocking on import
+_bankroll_manager = None
+def get_bankroll_manager():
+    global _bankroll_manager
+    if _bankroll_manager is None:
+        _bankroll_manager = BankrollManager()
+    return _bankroll_manager
 
 router = APIRouter()
 
@@ -129,6 +136,26 @@ async def list_meetings():
                     if len(parts) >= 3:
                         meetings_dict[parts[1]] = parts[2]
                 
+        # Also check for meetings with racecards (even if no predictions yet)
+        rc_dir = DATA_DIR
+        for rc in rc_dir.glob("racecard_*.json"):
+            parts = rc.stem.split("_")
+            if len(parts) >= 3:
+                # racecard_YYYYMMDD_RX.json -> date = YYYY-MM-DD
+                date_compact = parts[1]
+                if len(date_compact) == 8:
+                    date_str = f"{date_compact[:4]}-{date_compact[4:6]}-{date_compact[6:]}"
+                    # Try to determine venue from racecard content
+                    venue = "ST"  # Default
+                    try:
+                        with open(rc, "r", encoding="utf-8") as f:
+                            rc_data = json.load(f)
+                            if isinstance(rc_data, dict) and "venue" in rc_data:
+                                venue = rc_data["venue"]
+                    except:
+                        pass
+                    meetings_dict[date_str] = venue
+        
         sorted_meetings = [
             {"date": d, "venue": v} 
             for d, v in sorted(meetings_dict.items(), key=lambda x: x[0], reverse=True)
@@ -345,7 +372,7 @@ async def get_upcoming_top_picks(date: str = None, venue: str = None):
             "date": target_date,
             "venue": venue,
             "picks": top_picks,
-            "bankroll": bankroll_manager.get_current_bankroll()
+            "bankroll": get_bankroll_manager().get_current_bankroll()
         }
     except Exception as e:
         return {"success": False, "error": str(e)}

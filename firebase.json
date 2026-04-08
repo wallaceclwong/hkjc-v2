@@ -1,4 +1,7 @@
 ﻿{
+  "functions": {
+    "source": "functions"
+  },
   "hosting": {
     "public": "dashboard",
     "ignore": [
@@ -23,43 +26,43 @@
     "rewrites": [
       {
         "source": "/ping",
-        "run": { "serviceId": "hkjc-predictor", "region": "us-central1" }
+        "function": "apiProxy"
       },
       {
         "source": "/latest{,/**}",
-        "run": { "serviceId": "hkjc-predictor", "region": "us-central1" }
+        "function": "apiProxy"
       },
       {
         "source": "/picks{,/**}",
-        "run": { "serviceId": "hkjc-predictor", "region": "us-central1" }
+        "function": "apiProxy"
       },
       {
         "source": "/meetings{,/**}",
-        "run": { "serviceId": "hkjc-predictor", "region": "us-central1" }
+        "function": "apiProxy"
       },
       {
         "source": "/reports{,/**}",
-        "run": { "serviceId": "hkjc-predictor", "region": "us-central1" }
+        "function": "apiProxy"
       },
       {
         "source": "/prediction{,/**}",
-        "run": { "serviceId": "hkjc-predictor", "region": "us-central1" }
+        "function": "apiProxy"
       },
       {
         "source": "/execution{,/**}",
-        "run": { "serviceId": "hkjc-predictor", "region": "us-central1" }
+        "function": "apiProxy"
       },
       {
         "source": "/health{,/**}",
-        "run": { "serviceId": "hkjc-predictor", "region": "us-central1" }
+        "function": "apiProxy"
       },
       {
         "source": "/debug{,/**}",
-        "run": { "serviceId": "hkjc-predictor", "region": "us-central1" }
+        "function": "apiProxy"
       },
       {
         "source": "/subscribe",
-        "run": { "serviceId": "hkjc-predictor", "region": "us-central1" }
+        "function": "apiProxy"
       },
       {
         "source": "**",

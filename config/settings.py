@@ -17,7 +17,7 @@ class Config:
     TUNED_MODEL_ENDPOINT = os.getenv("TUNED_MODEL_ENDPOINT", "")
     GEMINI_MODEL = os.getenv("GEMINI_MODEL", TUNED_MODEL_ENDPOINT) or "gemini-2.5-flash"  # Falls back if endpoint not set
     GEMINI_MODEL_FALLBACK = "gemini-2.5-flash"  # For weather intel and non-prediction tasks
-    SHADOW_MODEL = os.getenv("SHADOW_MODEL", "gemini-2.5-pro")  # A/B test: shadow model runs in parallel
+    SHADOW_MODEL = os.getenv("SHADOW_MODEL", "")  # Optional A/B shadow model (empty = disabled)
     USE_VERTEX_AI = os.getenv("USE_VERTEX_AI", "True").lower() == "true"
     GCP_LOCATION = "us-central1"       # Models are confirmed available here
     GCS_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME", "hkjc-v2-vault-316780")
@@ -115,8 +115,13 @@ class Config:
     BACKFILL_BATCH_SIZE = 5
     BACKFILL_DELAY = 5000  # 5 seconds between meetings
 
+    _firestore_client = None
+    
     @classmethod
     def get_firestore_client(cls):
+        if cls._firestore_client is not None:
+            return cls._firestore_client
+            
         from google.cloud import firestore
         from google.oauth2 import service_account
         
@@ -124,6 +129,8 @@ class Config:
         if creds_path and os.path.exists(creds_path):
             print(f"[INFO] Using Service Account Key: {creds_path}")
             creds = service_account.Credentials.from_service_account_file(creds_path)
-            return firestore.Client(project=cls.PROJECT_ID, database=cls.FIRESTORE_DATABASE, credentials=creds)
-            
-        return firestore.Client(project=cls.PROJECT_ID, database=cls.FIRESTORE_DATABASE)
+            cls._firestore_client = firestore.Client(project=cls.PROJECT_ID, database=cls.FIRESTORE_DATABASE, credentials=creds)
+        else:
+            cls._firestore_client = firestore.Client(project=cls.PROJECT_ID, database=cls.FIRESTORE_DATABASE)
+        
+        return cls._firestore_client

@@ -17,7 +17,8 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 VM_HOST = "root@100.109.76.69"  # Vultr VM via Tailscale
-VM_PATH = "/opt/hkjc"
+VM_PATH = "/root/hkjc"
+LOCK_FILE = PROJECT_ROOT / "data" / ".pc_race_day.lock"
 
 def load_fixtures(date_str):
     year = datetime.strptime(date_str, "%Y-%m-%d").year
@@ -78,14 +79,32 @@ def scrape_racecards(date_str, venue, max_races=11):
         print(f"\n  Race {r}:")
         run_cmd([py, script, "--date", date_fmt, "--venue", venue, "--race", str(r)])
 
-def sync_to_vm(date_str):
-    """Step 2: SCP racecard files to VM."""
+def scrape_odds(date_str, venue, max_races=11):
+    """Step 2: Scrape live odds snapshots from HKJC (residential IP)."""
     print(f"\n{'='*60}")
-    print(f"STEP 2: Syncing racecards to VM")
+    print(f"STEP 2: Scraping live odds snapshots ({date_str} {venue})")
+    print(f"{'='*60}")
+    py = str(PROJECT_ROOT / ".venv" / "Scripts" / "python.exe")
+    script = str(PROJECT_ROOT / "services" / "odds_ingest.py")
+    ok = 0
+    for r in range(1, max_races + 1):
+        print(f"  Race {r}:")
+        success = run_cmd([py, script, "--date", date_str, "--venue", venue, "--race", str(r)])
+        if success:
+            ok += 1
+    print(f"  Captured odds for {ok}/{max_races} races.")
+    return ok > 0
+
+
+def sync_to_vm(date_str):
+    """Step 3: SCP racecard and odds files to VM."""
+    print(f"\n{'='*60}")
+    print(f"STEP 3: Syncing racecards & odds to VM")
     print(f"{'='*60}")
     
     date_compact = date_str.replace("-", "")
     racecard_files = list((PROJECT_ROOT / "data").glob(f"racecard_{date_compact}_R*.json"))
+    odds_files = list((PROJECT_ROOT / "data" / "odds").glob(f"snapshot_{date_compact}_R*.json"))
     
     if not racecard_files:
         print("  [WARN] No racecard files found to sync!")
@@ -94,13 +113,16 @@ def sync_to_vm(date_str):
     for f in racecard_files:
         run_cmd(["scp", "-o", "ConnectTimeout=10", str(f), f"{VM_HOST}:{VM_PATH}/data/{f.name}"])
     
-    print(f"  Synced {len(racecard_files)} racecard files to VM")
+    for f in odds_files:
+        run_cmd(["scp", "-o", "ConnectTimeout=10", str(f), f"{VM_HOST}:{VM_PATH}/data/odds/{f.name}"])
+    
+    print(f"  Synced {len(racecard_files)} racecards + {len(odds_files)} odds snapshots to VM")
     return True
 
 def trigger_vm_predictions(date_str, venue):
-    """Step 3: Trigger AI predictions on VM (Gemini, no HKJC scraping)."""
+    """Step 4: Trigger AI predictions on VM (Gemini, no HKJC scraping)."""
     print(f"\n{'='*60}")
-    print(f"STEP 3: Triggering AI predictions on VM ({date_str} {venue})")
+    print(f"STEP 4: Triggering AI predictions on VM ({date_str} {venue})")
     print(f"{'='*60}")
     
     cmd = (
@@ -113,7 +135,7 @@ def trigger_vm_predictions(date_str, venue):
     run_cmd(["ssh", "-o", "ConnectTimeout=10", VM_HOST, cmd], timeout=600)
 
 def start_local_watchdog():
-    """Step 4: Start local market watchdog for live odds."""
+    """Step 5: Start local market watchdog for live odds."""
     print(f"\n{'='*60}")
     print(f"STEP 4: Starting local market watchdog (residential IP)")
     print(f"{'='*60}")
@@ -122,39 +144,65 @@ def start_local_watchdog():
     print("  python -m uvicorn dashboard.server:app --host 0.0.0.0 --port 8000")
 
 def main():
+    # Lock file check to prevent multiple instances
+    if LOCK_FILE.exists():
+        lock_time = datetime.fromtimestamp(LOCK_FILE.stat().st_mtime)
+        if datetime.now() - lock_time < timedelta(hours=2):
+            print(f"[LOCK] Another instance is running (lock file: {LOCK_FILE})")
+            sys.exit(0)
+        else:
+            # Stale lock, remove it
+            LOCK_FILE.unlink()
+    
+    # Create lock file
+    try:
+        LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
+        LOCK_FILE.write_text(str(datetime.now()))
+    except Exception as e:
+        print(f"[WARN] Could not create lock file: {e}")
+    
     parser = argparse.ArgumentParser(description="PC Race Day Orchestrator")
     parser.add_argument("--date", type=str, default=None)
     parser.add_argument("--venue", type=str, default=None)
     args = parser.parse_args()
     
-    if args.date and args.venue:
-        meetings = [{"date": args.date, "venue": args.venue}]
-    elif args.date:
-        venue = find_meeting(args.date)
-        if not venue:
-            print(f"No meeting found for {args.date}")
-            return
-        meetings = [{"date": args.date, "venue": venue}]
-    else:
-        meetings = find_upcoming_meetings()
-        if not meetings:
-            print("No upcoming meetings found.")
-            return
-    
-    for m in meetings:
-        date_str, venue = m["date"], m["venue"]
-        print(f"\n{'#'*60}")
-        print(f"# Processing: {date_str} ({venue})")
-        print(f"{'#'*60}")
+    try:
+        if args.date and args.venue:
+            meetings = [{"date": args.date, "venue": args.venue}]
+        elif args.date:
+            venue = find_meeting(args.date)
+            if not venue:
+                print(f"No meeting found for {args.date}")
+                return
+            meetings = [{"date": args.date, "venue": venue}]
+        else:
+            meetings = find_upcoming_meetings()
+            if not meetings:
+                print("No upcoming meetings found.")
+                return
         
-        scrape_racecards(date_str, venue)
-        if sync_to_vm(date_str):
-            trigger_vm_predictions(date_str, venue)
-    
-    start_local_watchdog()
-    print(f"\n{'='*60}")
-    print("DONE! Predictions will be generated on VM and synced to Firestore.")
-    print(f"{'='*60}")
+        for m in meetings:
+            date_str, venue = m["date"], m["venue"]
+            print(f"\n{'#'*60}")
+            print(f"# Processing: {date_str} ({venue})")
+            print(f"{'#'*60}")
+            
+            scrape_racecards(date_str, venue)
+            scrape_odds(date_str, venue)
+            if sync_to_vm(date_str):
+                trigger_vm_predictions(date_str, venue)
+        
+        start_local_watchdog()
+        print(f"\n{'='*60}")
+        print("DONE! Predictions will be generated on VM and synced to Firestore.")
+        print(f"{'='*60}")
+    finally:
+        # Clean up lock file
+        try:
+            if LOCK_FILE.exists():
+                LOCK_FILE.unlink()
+        except Exception as e:
+            print(f"[WARN] Could not remove lock file: {e}")
 
 if __name__ == "__main__":
     main()

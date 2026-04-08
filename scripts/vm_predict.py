@@ -34,9 +34,9 @@ async def run_predictions(date_str: str, venue: str):
     pe = PredictionEngine()
     for r in range(1, 12):
         try:
-            pred = await pe.predict(date_str, venue, r)
+            pred = await pe.generate_prediction(date_str, venue, r)
             if pred:
-                print(f"  R{r}: OK (confidence={pred.get('confidence_score', '?')})")
+                print(f"  R{r}: OK (confidence={pred.confidence_score if hasattr(pred, 'confidence_score') else '?'})")
             else:
                 print(f"  R{r}: SKIP (no racecard data)")
         except Exception as e:
