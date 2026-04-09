@@ -16,19 +16,15 @@ def check_vm(host, user, password):
         for f in root_files:
             print(f"  {f}")
         
-        # Check if ultimate_engine exists anywhere
-        print("\n--- Searching for ultimate_engine ---")
-        stdin, stdout, stderr = ssh.exec_command("find /root -name 'ultimate_engine' -type d")
+        # Check if hkjc exists
+        print("\n--- Searching for hkjc ---")
+        stdin, stdout, stderr = ssh.exec_command("find /root -name 'hkjc' -type d")
         found = stdout.read().decode().splitlines()
         if found:
             for path in found:
                 print(f"✅ FOUND: {path}")
-                # Check contents of what's found
-                stdin, stdout, stderr = ssh.exec_command(f"ls -F {path}")
-                print(f"Contents of {path}:")
-                print(stdout.read().decode())
         else:
-            print("❌ NOT FOUND: ultimate_engine")
+            print("❌ NOT FOUND: hkjc")
 
         ssh.close()
     except Exception as e:

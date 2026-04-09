@@ -75,4 +75,4 @@ def analyze_smart_money(odds_dir):
         print("\nNo strong Smart Money signals (<-10%) detected.")
 
 if __name__ == "__main__":
-    analyze_smart_money("/root/ultimate_engine/data/odds")
+    analyze_smart_money("data/odds")
