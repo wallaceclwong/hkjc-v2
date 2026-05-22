@@ -1,6 +1,6 @@
 # HKJC Betting System V2
 
-Professional horse racing prediction engine powered by Gemini AI and Google Cloud.
+Professional horse racing prediction engine powered by DeepSeek AI and Google Cloud.
 
 > [!IMPORTANT]
 > **AI EXPERT KNOWLEDGE BASE**: If you are an AI assistant helping with this project, you MUST read the [Expert Knowledge Base](file:///c:/Users/ASUS/hkjc/docs/expert/) before making any code changes. This ensures you understand the core strategy, safety buffers, and 3-layer consensus logic.
@@ -21,7 +21,7 @@ The first time, clone the repo:
 git clone https://github.com/wallaceclwong/hkjc-v2.git
 cd hkjc-v2
 pip install -r requirements.txt
-cp .env.example .env  # Then add your Gemini API Key
+cp .env.example .env  # Then add your DeepSeek API Key
 ```
 
 Every time you switch **TO** a machine:
@@ -31,7 +31,7 @@ git pull origin main
 
 ### 3. Shared Resources (Cloud)
 - **Database:** All machines connect to the same **Google Firestore** project. Data scraped on PC 1 is instantly available on PC 2.
-- **AI:** All machines use the same **Gemini API** key and prompts.
+- **AI:** All machines use the same **DeepSeek API** key and prompts.
 
 ## 🚀 Cloud Run Deployment
 
@@ -43,7 +43,7 @@ To run this autonomously 24/7 in the cloud:
     ```
 2.  **Deploy**:
     ```bash
-    gcloud run deploy hkjc-predictor --image gcr.io/hkjc-v2/hkjc-predictor --platform managed --region us-central1 --set-env-vars="USE_VERTEX_AI=True,GCP_LOCATION=us-central1"
+    gcloud run deploy hkjc-predictor --image gcr.io/hkjc-v2/hkjc-predictor --platform managed --region us-central1 --set-env-vars="USE_DEEPSEEK=True,GCP_LOCATION=us-central1"
     ```
 3.  **Scheduler**: Set a Cloud Scheduler job to `POST` to your Cloud Run URL 15 minutes before the first race.
 

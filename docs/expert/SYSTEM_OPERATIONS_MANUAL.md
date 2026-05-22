@@ -13,7 +13,7 @@ The system follows a strict 4-step sequence:
 For a quick system check, always run these in order:
 - `python test_local_system.py`: Checks if all data directories exist.
 - `python check_firestore_results.py`: Verifies cloud synchronization.
-- `python scripts/audit_ai.py`: Health check for Vertex AI endpoints.
+- `python scripts/check_model_health.py (disabled)`: Health check for DeepSeek endpoints.
 
 ## 3. Automation Scheduling (Task Scheduler)
 - **Time 10:00 AM**: Primary Fetch & Predict (Wait until later for final odds).

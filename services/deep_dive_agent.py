@@ -1,8 +1,10 @@
 import os
 import sys
 import json
-from google import genai
-from google.genai import types
+from openai import OpenAI
+# Vertex AI removed — using DeepSeek
+from dotenv import load_dotenv
+load_dotenv("/opt/hkjc/.env")
 from pathlib import Path
 from loguru import logger
 
@@ -15,12 +17,12 @@ from services.firestore_service import FirestoreService
 
 class DeepDiveAgent:
     def __init__(self):
-        self.client = genai.Client(
-            vertexai=True,
-            project=Config.MODEL_PROJECT_ID,
-            location=Config.GCP_LOCATION
+        self.client = OpenAI(
+            api_key=Config.DEEPSEEK_API_KEY,
+            base_url=Config.DEEPSEEK_BASE_URL,
+            #
         )
-        self.model_id = "gemini-2.0-pro-exp-02-05" # Always use Pro for deep dives
+        self.model_id = Config.DEEPSEEK_MODEL_R1 # Always use Pro for deep dives
         self.firestore = FirestoreService()
         self.weather = WeatherNextClient()
         self.base_dir = Path(__file__).resolve().parent.parent
@@ -41,18 +43,13 @@ class DeepDiveAgent:
         prompt = self._construct_deep_dive_prompt(card, saddle_number, weather_intel)
         
         try:
-            # We use DeepSeek-R1 logic here via the Vertex AI / GenAI client if configured, 
+            # Uses DeepSeek-R1 for reasoning.
             # or simply use Gemini 2.0 Pro for the Reasoning step.
-            response = self.client.models.generate_content(
-                model=self.model_id,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    temperature=0.7, 
-                    max_output_tokens=4096
-                )
+            response = self.client.chat.completions.create(
+                messages=[{"role": "user", "content": prompt}],
             )
             
-            report_text = response.text
+            report_text = response.choices[0].message.content
             
             # Save the report
             report_path = self.reports_dir / f"deep_dive_{card.date}_R{card.race_no}_S{saddle_number}.md"

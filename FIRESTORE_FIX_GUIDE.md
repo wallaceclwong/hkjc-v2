@@ -13,7 +13,7 @@ Look for: `hkjc-backend@hkjc-v2.iam.gserviceaccount.com`
 2. Click **"+ ADD ANOTHER ROLE"**
 3. Search for and add: **"Cloud Datastore User"**
 4. Click **"+ ADD ANOTHER ROLE"** again
-5. Search for and add: **"Vertex AI User"**
+5. Search for and add: **"DeepSeek AI User"**
 6. Click **"SAVE"**
 
 ### Step 4: Wait & Test

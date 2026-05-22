@@ -107,7 +107,7 @@ def main():
         print(f"[OK] Predictions already exist for {date} {venue}")
     else:
         print(f"[INFO] Generating predictions for {date} {venue}")
-        print(f"[COST] This will cost ~$0.22 (Vertex AI)")
+        print(f"[COST] This will cost ~$0.22 (DeepSeek AI)")
         
         cmd = [py, 'batch_predict.py', date, venue, '11']
         # Auto-approve by piping 'yes'

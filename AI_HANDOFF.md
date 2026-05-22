@@ -16,7 +16,7 @@ This is a **Hong Kong horse racing betting system** with AI predictions, Kelly C
 
 ### Core Components
 1. **Racecard Ingestion** (`services/racecard_ingest.py`) - Fetches race data from HKJC
-2. **Prediction Engine** (`services/prediction_engine.py`) - Gemini-powered predictions
+2. **Prediction Engine** (`services/prediction_engine.py`) - DeepSeek-powered predictions
 3. **Results Ingestion** (`services/results_ingest.py`) - Scrapes race results & dividends
 4. **Auto-Learning** (`services/auto_learning.py`) - Learns from outcomes, adjusts biases
 5. **Track Analytics** (`services/track_analytics.py`) - Performance metrics
@@ -66,7 +66,7 @@ This is a **Hong Kong horse racing betting system** with AI predictions, Kelly C
 - Virtual env: `.venv`
 - GCP Project: hkjc-v2
 - Firestore: Connected
-- Vertex AI: Tuned model configured
+- DeepSeek AI: Tuned model configured
 
 ---
 
@@ -156,7 +156,7 @@ python dashboard/server.py
 ### Preparation Checklist
 - [ ] Racecard available (check Tuesday night)
 - [ ] Fetch all races with smart_racecard_fetcher.py
-- [ ] Generate predictions (uses Vertex AI - costs money!)
+- [ ] Generate predictions (uses DeepSeek AI - costs money!)
 - [ ] Review Kelly stakes
 - [ ] Monitor odds
 - [ ] Collect results after races
@@ -167,7 +167,7 @@ python dashboard/server.py
 ## Important Context
 
 ### User Preferences
-- **Always ask before billable operations** (Vertex AI, etc.)
+- **Always ask before billable operations** (DeepSeek AI, etc.)
 - Budget-conscious but willing to spend cost-effectively
 - Prefers local operations when possible
 - Wants detailed summaries, not verbose explanations
@@ -195,7 +195,7 @@ python dashboard/server.py
 
 ### GCP Services
 - Firestore: Working
-- Vertex AI: Configured but not tested (avoid charges)
+- DeepSeek AI: Configured but not tested (avoid charges)
 - BigQuery: Not set up (could be useful)
 - Service account: `hkjc-backend@hkjc-v2.iam.gserviceaccount.com`
 

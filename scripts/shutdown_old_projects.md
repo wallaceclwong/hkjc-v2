@@ -30,4 +30,4 @@ Project shutdown must be done via GCP Console (cannot be automated via CLI for s
 
 Projects will be scheduled for deletion in 30 days. They can be restored during this period if needed.
 
-**Estimated savings:** ~$15/month (no more Vertex AI endpoint idle costs)
+**Estimated savings:** ~$15/month (no more DeepSeek AI endpoint idle costs)

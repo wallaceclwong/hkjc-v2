@@ -53,7 +53,6 @@ jobs:
           region: ${{ env.REGION }}
           image: gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
           env_vars: |-
-            USE_VERTEX_AI=True
             GCP_LOCATION=${{ env.REGION }}
             GCP_PROJECT_ID=${{ env.PROJECT_ID }}
             FIRESTORE_DATABASE=(default)

@@ -193,7 +193,7 @@ class BettingEvaluator:
                     "official_result": f"WIN {official_win}" if official_win else "--",
                     "ai_top_pick": rec_bet,
                     "ai_roi": round(ai_roi, 1),
-                    "model": pred_data.get("gemini_model", "shadow"),
+                    "model": pred_data.get("model_id", "shadow"),
                 })
             except Exception as e:
                 print(f"Error evaluating shadow {pred_file.name}: {e}")
@@ -215,8 +215,8 @@ class BettingEvaluator:
         p_wins = sum(1 for r in primary if "✅" in r.get("result_status", ""))
         s_wins = sum(1 for r in shadow if r["ai_roi"] > 0)
 
-        p_model = Config.GEMINI_MODEL.split("/")[-1] if "/" in Config.GEMINI_MODEL else Config.GEMINI_MODEL
-        s_model = Config.SHADOW_MODEL
+        p_model = Config.DEEPSEEK_MODEL.split("/")[-1] if "/" in Config.DEEPSEEK_MODEL else Config.DEEPSEEK_MODEL
+        s_model = "disabled"
 
         section = f"\n## 🔬 A/B Model Comparison\n"
         section += f"| | **{p_model}** (Primary) | **{s_model}** (Shadow) |\n"

@@ -10,10 +10,8 @@ python-dotenv
 aiohttp
 
 # Google AI
-google-genai
 google-cloud-firestore
 firebase-admin
-google-cloud-aiplatform
 google-cloud-bigquery
 
 # Web Server

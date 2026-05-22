@@ -32,7 +32,7 @@
    - Run: `prediction_engine.py`
    - Takes: ~10-15 minutes for 11 races
    - When: After racecards fetched
-   - Uses: Vertex AI (billable)
+   - Uses: DeepSeek AI (billable)
    - **PC must be on for 15 minutes**
 
 3. **Placing Bets** (Manual)

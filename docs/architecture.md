@@ -4,7 +4,7 @@ This document provides a comprehensive overview of the HKJC V2 prediction system
 
 ## 1. High-Level Architecture
 
-The system is designed as a multi-environment architecture that shares a common data core (Firestore) and AI brain (Gemini).
+The system is designed as a multi-environment architecture that shares a common data core (Firestore) and AI brain (DeepSeek).
 
 ```mermaid
 graph TD
@@ -17,7 +17,7 @@ graph TD
     subgraph "Data & AI Core (Google Cloud)"
         FS[("Google Firestore")]
         GCS[("Cloud Storage (Vault)")]
-        Vertex["Vertex AI (Gemini 2.5 Pro)"]
+        Vertex["DeepSeek AI (DeepSeek 2.5 Pro)"]
     end
 
     subgraph "External Integration"
@@ -49,8 +49,8 @@ graph TD
 *   **Local JSON Cache**: Found in `data/`, used for performance and offline development to reduce Firestore read costs.
 
 ### 🧠 AI Engine
-*   **Gemini 2.5 Pro**: The core reasoning engine.
-*   **Vertex AI (us-central1)**: Hosts the Gemini endpoints and manages context caching for large historical datasets.
+*   **DeepSeek 2.5 Pro**: The core reasoning engine.
+*   **DeepSeek AI (us-central1)**: Hosts the DeepSeek endpoints and manages context caching for large historical datasets.
 
 ## 3. Core Data Flow
 
@@ -58,7 +58,7 @@ graph TD
 sequenceDiagram
     participant S as Ingestion Services
     participant FS as Firestore
-    participant AI as Gemini AI (Vertex)
+    participant AI as DeepSeek AI (Vertex)
     participant D as Dashboard (FastAPI)
 
     S->>S: Scrape HKJC (Fixtures/Odds)
@@ -75,7 +75,7 @@ sequenceDiagram
 
 | Component | Responsibility |
 | :--- | :--- |
-| `prediction_engine.py` | Orchestrates the Gemini prompts and multi-agent reasoning logic. |
+| `prediction_engine.py` | Orchestrates the DeepSeek prompts and multi-agent reasoning logic. |
 | `firestore_service.py` | Handles all CRUD operations with Google Cloud Firestore. |
 | `market_watchdog.py` | Monitors live odds fluctuations for "Smart Money" detection. |
 | `execution_engine.py` | Uses Playwright to automate bet slips on the HKJC website. |

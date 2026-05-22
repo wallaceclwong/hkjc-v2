@@ -35,7 +35,7 @@
 ## GOOGLE CLOUD SERVICES
 
 ### Working
-- [OK] Vertex AI initialization
+- [OK] DeepSeek AI initialization
 - [OK] Service account credentials file
 - [OK] Model endpoint configured
 - [OK] Environment variables set
@@ -47,7 +47,7 @@
   - Fix needed: Grant "Cloud Datastore User" role in GCP Console
 
 ### Not Tested (Avoiding Charges)
-- [?] Vertex AI predictions (endpoint ready but not called)
+- [?] DeepSeek AI predictions (endpoint ready but not called)
 - [?] Cloud storage operations
 
 ---
@@ -107,7 +107,7 @@
 
 ### Optional (Requires GCP Console)
 - Fix Firestore permissions for cloud sync
-- Test Vertex AI predictions before race day
+- Test DeepSeek AI predictions before race day
 - Enable cloud backup
 
 ---

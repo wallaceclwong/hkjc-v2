@@ -13,7 +13,7 @@ Your betting system spans multiple environments working together:
 ### **Components**:
 - ✅ **Python Scripts** (`c:\Users\ASUS\hkjc\`)
   - Racecard fetching
-  - Prediction generation (Vertex AI calls)
+  - Prediction generation (DeepSeek AI calls)
   - Results scraping
   - Auto-learning
   - Backtesting
@@ -81,13 +81,13 @@ Your betting system spans multiple environments working together:
 - **Cost**: FREE (under quota)
 - **Syncs**: Bidirectional with local PC
 
-#### **B. Vertex AI** (Gemini API)
+#### **B. DeepSeek AI** (DeepSeek API)
 - **Status**: ✅ Configured and ready
 - **Usage**: Multi-model consensus generation
 - **Cost**: ~$0.09 per race day (Optimized)
 - **Models**: 
-  - **Primary**: Gemini 2.5 Pro (Tuned)
-  - **Shadow**: Gemini 2.0 Flash (Consensus check)
+  - **Primary**: DeepSeek 2.5 Pro (Tuned)
+  - **Shadow**: DeepSeek 2.0 Flash (Consensus check)
 - **Endpoint**: `projects/316780770240/locations/us-central1/endpoints/8559390708736196608`
 
 #### **C. Expert Knowledge Base** (New Logic Layer)
@@ -160,7 +160,7 @@ Your betting system spans multiple environments working together:
 ## 6. ELITE AI TIER (New 2026 Strategy)
 
 ### **Consensus Strategy**
-The system now runs a **Double-Model Scan**. If Gemini 2.5 Pro (Accuracy) and Gemini 2.0 Flash (Speed) disagree on the winner, the bet is automatically cancelled.
+The system now runs a **Double-Model Scan**. If DeepSeek 2.5 Pro (Accuracy) and DeepSeek 2.0 Flash (Speed) disagree on the winner, the bet is automatically cancelled.
 
 ### **Deep-Dive Agent**
 Triggered for bets > $150 HKD. Performs a specialized "Extreme Reasoning" analysis of pedigree and steward reports for extra safety.
@@ -177,7 +177,7 @@ Triggered for bets > $150 HKD. Performs a specialized "Extreme Reasoning" analys
 │                                                          │
 │  ┌──────────────┐      ┌──────────────┐                │
 │  │  Racecards   │──────▶│ Predictions  │                │
-│  │   (HKJC)     │      │ (Vertex AI)  │────┐           │
+│  │   (HKJC)     │      │ (DeepSeek AI)  │────┐           │
 │  └──────────────┘      └──────────────┘    │           │
 │         │                      │            │           │
 │         │                      ▼            │           │
@@ -221,7 +221,7 @@ Triggered for bets > $150 HKD. Performs a specialized "Extreme Reasoning" analys
 ### **Wednesday Morning (Automated)**
 1. **Task Scheduler** (PC) wakes up
 2. Reads racecards from **local files**
-3. Calls **Vertex AI** for predictions ($0.22)
+3. Calls **DeepSeek AI** for predictions ($0.22)
 4. Saves predictions to **local files**
 5. Syncs to **Firestore**
 6. Filters high confidence bets
@@ -249,7 +249,7 @@ Triggered for bets > $150 HKD. Performs a specialized "Extreme Reasoning" analys
 ### ✅ **Working**
 - Local Python environment
 - Firestore connection
-- Vertex AI access
+- DeepSeek AI access
 - Firebase dashboard (https://hkjc-v2.web.app/)
 - Service account permissions
 - Auto-learning system
@@ -290,7 +290,7 @@ Triggered for bets > $150 HKD. Performs a specialized "Extreme Reasoning" analys
 ## Cost Summary
 
 ### **Monthly Costs**
-- Vertex AI predictions: ~$2/month (8 race days × $0.22)
+- DeepSeek AI predictions: ~$2/month (8 race days × $0.22)
 - Firestore: FREE (under quota)
 - Firebase Hosting: FREE
 - Tailscale: FREE (personal use)
@@ -341,7 +341,7 @@ Triggered for bets > $150 HKD. Performs a specialized "Extreme Reasoning" analys
 All critical components working:
 - ✅ Local automation
 - ✅ Firestore sync
-- ✅ Vertex AI predictions
+- ✅ DeepSeek AI predictions
 - ✅ Firebase dashboard
 - ✅ Auto-learning
 - ✅ Backtesting validated (519% ROI)
