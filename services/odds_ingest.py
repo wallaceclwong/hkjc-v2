@@ -22,14 +22,22 @@ class OddsIngest:
         Fetches real-time Win & Place odds for a specific race.
         """
         url = f"https://bet.hkjc.com/en/racing/wp/{date_str}/{venue}/{race_no}"
-        
-        page = await self.browser_mgr.get_page()
+
+        context, page = await self.browser_mgr.get_persistent_context("odds")
 
         print(f"Navigating to {url}...")
         try:
-            await page.goto(url, wait_until="load", timeout=30000)
-            
-            # Wait for content to load 
+            resp = await page.goto(url, wait_until="load", timeout=30000)
+
+            # Detect redirect away from odds page (session/login required)
+            current_url = page.url
+            if "/wp/" not in current_url:
+                print(f"WARNING: Redirected to {current_url} — session may need login.")
+                print("  Open https://bet.hkjc.com in a headed browser to establish a session, then retry.")
+                await page.close()
+                return None
+
+            # Wait for content to load
             await page.wait_for_selector(f'#wpleg_WIN_{race_no}_1', timeout=30000)
             
             print(f"Extracting odds for Race {race_no}...")
